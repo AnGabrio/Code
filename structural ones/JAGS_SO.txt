@@ -1,0 +1,137 @@
+model {
+
+# data variables
+# e, c and u denote the QALYs, costs and baseline utilities
+# d.e and d.u denote the structural one indicators for e and u
+# age, ethnicity and employment are covariates in the model of d.e and d.u
+
+# control group (t = 1)
+
+	for(i in 1 : N1) {
+	
+		# 1. Module for the structural ones in the QALYs 
+		d.e1[i] ~ dbern(pi.e[i, 1])
+		logit(pi.e[i, 1]) <- gamma0[1] + gamma1[1] * (u1[i] - mean(u1[])) + 
+			gamma2[1] * (age1[i] - mean(age1[])) + gamma3[ethnicity1[i], 1] + gamma4[employment1[i], 1]
+
+		#2. Module for the structural ones in the baseline utilities 
+		d.u1[i] ~ dbern(pi.u[i, 1])
+		logit(pi.u[i, 1]) <- eta0[1] + eta1[1] * (age1[i] - mean(age1[])) + eta2[ethnicity1[i], 1] + eta3[employment1[i], 1]
+
+		#3. Marginal module for the QALYs
+		e1[i] ~ dbeta(phi.e[i, 1] * tau.e[i, 1], (1 - phi.e[i, 1]) * tau.e[i, 1])
+		tau.e[i, 1] <- phi.e[i, 1] * (1 - phi.e[i, 1]) / pow(sigma.e[d.e1[i] + 1], 2) - 1
+		logit(phi.e[i, 1]) <- alpha0[d.e1[i]+1, 1] + alpha1[d.e1[i]+1, 1] * (u1[i] - mean(u1[]))
+
+		#4. Marginal module for the baseline utilities
+		u1[i] ~ dbeta(mu.u[d.u1[i] + 1, 1] * tau.u[d.u1[i] + 1, 1], (1 - mu.u[d.u1[i] + 1, 1]) * tau.u[d.u1[i] + 1, 1]) 
+      
+		#5. Conditional module for the costs
+		c1[i] ~ dgamma(phi.c[i, 1] * tau.c[i, 1], tau.c[i, 1])
+		tau.c[i, 1] <- phi.c[i, 1] / pow(sigma.c[1], 2)
+		log( phi.c[i, 1]) <- beta0[1] + beta1[1] * (e1[i] - mu.e[1])
+	}
+
+#intervention group (t = 2)
+
+	for(i in 1 : N2) {
+	
+		#1. Module for the structural ones in the QALYs 
+		d.e2[i] ~ dbern(pi.e[i, 2])
+		logit(pi.e[i, 2]) <- gamma0[2] + gamma1[2] * (u2[i] - mean(u2[])) + 
+			gamma2[2] * (age2[i] - mean(age2[])) + gamma3[ethnicity2[i], 2] + gamma4[employment2[i], 2]
+
+		#2. Module for the structural ones in the baseline utilities 
+		d.u2[i] ~ dbern(pi.u[i, 2])
+		logit(pi.u[i, 2]) <- eta0[2] + eta1[2] * (age2[i] - mean(age2[])) + eta2[ethnicity2[i], 2] + eta3[employment2[i], 2]
+
+		#3. Marginal module for the QALYs
+		e2[i] ~ dbeta(phi.e[i, 2] * tau.e[i, 2], (1 - phi.e[i, 2]) * tau.e[i, 2])
+		tau.e[i,2] <- phi.e[i, 2] * (1 - phi.e[i, 2]) / pow(sigma.e[d.e2[i] + 1], 2) - 1
+		logit(phi.e[i, 2]) <- alpha0[d.e2[i] + 1, 2] + alpha1[d.e2[i] + 1, 2] * (u2[i] - mean(u2[]))
+
+		#4. Marginal module for the baseline utilities
+		u2[i] ~ dbeta(mu.u[d.u2[i] + 1, 2] * tau.u[d.u2[i] + 1, 2], (1 - mu.u[d.u2[i] + 1, 2]) * tau.u[d.u2[i] + 1, 2]) 
+      
+		#5. Conditional module for the costs
+		c2[i] ~ dgamma(phi.c[i, 2] * tau.c[i, 2], tau.c[i, 2])
+		tau.c[i, 1] <- phi.c[i, 1] / pow(sigma.c[2], 2)
+		log( phi.c[i, 2]) <- beta0[2] + beta1[2] * (e2[i] - mu.e[2])
+	}
+      
+#Priors
+#priors for module 1 and 2
+
+	for(t in 1 : 2) {
+		gamma0[t] ~ dlogis(0, 1)
+		gamma1[t] ~ dnorm(0, 0.00001)
+		gamma2[t] ~ dnorm(0, 0.00001)
+      
+		eta0[t] ~ dlogis(0, 1)
+		eta2[t] ~ dnorm(0, 0.00001)
+      
+		#priors on coefficients for categorical covariates 
+		#(setting reference category as 0)
+		gamma3[1, t] <- 0
+		gamma4[1, t] <- 0
+      
+		eta2[1, t] <- 0
+		eta3[1, t] <- 0
+	}
+      
+# set priors for all other categories
+# use blocking to improve model convergence
+# mu and tau values provided as data variables with zero means and small precisions (0.00001)
+# ethnicity has different numbers of categories between arms
+
+	gamma3[2:14, 1] ~ dmnorm(mu1.gamma3[], tau1.gamma3[, ])
+	gamma3[2:12, 2] ~ dmnorm(mu2.gamma3[], tau2.gamma3[, ])
+	gamma4[2:6, 1] ~ dmnorm(mu1.gamma4[], tau1.gamma4[, ])
+	gamma4[2:6, 2] ~ dmnorm(mu2.gamma4[], tau2.gamma4[, ])
+      
+	eta2[2:14, 1] ~ dmnorm(mu1.eta2[], tau1.eta2[, ])
+	eta2[2:12, 2] ~ dmnorm(mu2.eta2[], tau2.eta2[, ])
+	eta3[2:6, 1] ~ dmnorm(mu1.eta3[], tau1.eta3[, ])
+	eta3[2:6, 2] ~ dmnorm(mu2.eta3[], tau2.eta3[, ])
+
+	for(t in 1 : 2) {
+		# priors for model 3
+		# priors for the ones group in the QALYs
+		alpha0[2, t] <- logit(0.999999)
+		alpha1[2, t] <- 0
+		sigma.e[2, t] <- 0.00001   
+		# priors for the non-ones group in the QALYs 
+		alpha0[1, t] ~ dnorm(0, 0.000001)
+		alpha1[1, t] ~ dnorm(0, 0.000001)
+		sigma.e[1, t] ~ dunif(0, sd.limit.e[t])
+		sd.limit.e[t] <- pow(mu.e[1, t] * (1 - mu.e[1, t]), 0.5)
+
+		# priors for model 4
+		# priors for the ones group in the baseline utilities
+		tau.u[2, t] <- mu.u[2, t] * (1 - mu.u[2, t]) / pow(sigma.u[2, t], 2) - 1
+		logit(mu.u[2, t]) <- delta0[2, t]
+		delta0[2, t] <- logit(0.999999)
+		sigma.u[2, t] <- 0.00001    
+		# priors for the non-ones group in the baseline utilities     
+		tau.u[1, t] <- mu.u[1,t] * (1 - mu.u[1, t]) / pow(sigma.u[1, t], 2) - 1
+		logit(mu.u[1, t]) <- delta0[1,t]
+		delta0[1, t] ~ dnorm(0, 0.00001)
+		sigma.u[1, t] ~ dunif(0, sd.limit.u[t])
+		sd.limit.u[t] <- pow(mu.u[1, t] * (1 - mu.u[1, t]), 0.5)
+      
+		# priors for module 5
+		beta0[t] ~ dnorm(0, 0.00001)
+		sigma.c[t] ~ dunif(0, 1000)
+		beta1[t] ~ dnorm(0, 0.00001)
+
+		# obtain marginal probabilities for weighting
+		p[t] <- ilogit(gamma0[t])
+            
+		# obtain the weighted marginal mean QALYs
+		mu.e[t] <- p[t] + (1-p[t]) * ilogit(alpha0[t])
+	}
+
+	# compute incremental QALYs and costs
+	Delta_e <- mu.e[2] - mu.e[1]
+	Delta_c <- mu.c[2] - mu.c[1]
+}
