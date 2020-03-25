@@ -1,0 +1,154 @@
+model {
+
+# LIKELIHOOD FOR THE THREE MODULES
+
+for (i in 1:nmatches) {
+
+# Observed number of points scored by each team (Module 1)
+y.h[n] ~ dpois(theta[i,1])
+y.a[n] ~ dpois(theta[i,2])
+
+##scoring intensities (accounting for mixing components)
+log(theta[i,1]) <- mu + lambda + att[i,1] + def[i,1]
+att.h[i,1] <- alpha0[hometeam[i]] + alpha1[hometeam[i]]*att.eff.h[g] + 
+                     alpha2[hometeam[i]]*ser.eff.h[i] 
+def.h[i,1] <- beta0[awayteam[i]] + beta1[awayteam[i]]*def.eff.a[g] +
+                     beta2[awayteam[i]]*blo.eff.a[i]
+
+log(theta[i,2]) <- mu + att.a[i,2] + def.a[i,2]
+att.a[i,2] <- alpha0[awayteam[i]] + alpha1[awayteam[i]]*att.eff.a[i] + 
+                     alpha2[awayteam[i]]*ser.eff.a[i] 
+def.a[i,2] <- beta0[hometeam[i]] + beta1[hometeam[i]]*def.eff.h[i] + 
+                     beta2[hometeam[i]]*blo.eff.h[i]
+
+
+# Indicators for number of sets played (Module 2)
+d.s[i] ~ dbern(pi.s[i])
+logit(pi.s[i]) <- gamma[1] + gamma[2]*y.h[i] + gamma[3]*y.a[i]
+
+
+# Indicators for match winner (Module 3)
+d.m[i] ~ dbern(pi.m[i])
+logit(pi.m[i]) <- eta[1] + eta[2]*y.h[i] + eta[3]*y.a[i] + eta[4]*d.s[i]
+}
+
+# Priors on the constant and home effects
+mu ~ dnorm(0,0.00001)
+home ~ dnorm(0,0.00001)
+
+########################
+
+# INDEPENDENT PRIORS: BASIC MODEL
+
+## Trick to code the ‘‘sum-to-zero’’ constraint
+for (t in 1:nteams){
+alpha0.star[t] ~ dnorm(mu.alpha0,tau.alpha0)
+beta0.star[t] ~ dnorm(mu.beta0,tau.beta0)
+alpha0[t] <- alpha0.star[t] - mean(alpha0.star[])
+beta0[t] <- beta0.star[t] - mean(beta0.star[])
+alpha1.star[t] ~ dnorm(mu.alpha1,tau.alpha1)
+beta1.star[t] ~ dnorm(mu.beta1,tau.beta1)
+alpha2.star[t] ~ dnorm(mu.alpha2,tau.alpha2)
+beta2.star[t] ~ dnorm(mu.beta2,tau.beta2)
+alpha1[t] <- alpha1.star[t] - mean(alpha1.star[])
+beta1[t] <- beta1.star[t] - mean(beta1.star[])
+alpha2[t] <- alpha2.star[t] - mean(alpha2.star[])
+beta2[t] <- beta2.star[t] - mean(beta2.star[])
+}
+
+##priors on the random effects
+mu.alpha0 ~ dnorm(0,0.00001)
+mu.beta0 ~ dnorm(0,0.00001)
+tau.alpha0 ~ dgamma(0.01,0.01)
+tau.beta0 ~ dgamma(0.01,0.01)
+mu.alpha1 ~ dnorm(0,0.00001)
+mu.beta1 ~ dnorm(0,0.00001)
+tau.alpha1 ~ dgamma(0.01,0.01)
+tau.beta1 ~ dgamma(0.01,0.01)
+mu.alpha2 ~ dnorm(0,0.00001)
+mu.beta2 ~ dnorm(0,0.00001)
+tau.alpha2 ~ dgamma(0.01,0.01)
+tau.beta2 ~ dgamma(0.01,0.01)
+
+# JOINT PRIOR: SCALED IW MODEL 
+
+## Trick to code the ‘‘sum-to-zero’’ constraint
+for (t in 1:nteams){
+alpha0.star[t] <- xi.alpha0*Alpha[t,1]
+alpha1.star[t] <- xi.alpha1*Alpha[t,2]
+alpha2.star[t] <- xi.alpha2*Alpha[t,3]
+beta0.star[t] <- xi.beta0*Beta[t,1]
+beta1.star[t] <- xi.beta1*Beta[t,2]
+beta2.star[t] <- xi.beta2*Beta[t,3]
+
+alpha0[t] <- alpha0.star[t] - mean(alpha0.star[])
+beta0[t] <- beta0.star[t] - mean(beta0.star[])
+alpha1[t] <- alpha1.star[t] - mean(alpha1.star[])
+beta1[t] <- beta1.star[t] - mean(beta1.star[])
+alpha2[t] <- alpha2.star[t] - mean(alpha2.star[])
+beta2[t] <- beta2.star[t] - mean(beta2.star[])
+
+#multivariate normal prior on random effects
+Alpha[t,1:3] ~ dmnorm (M.raw.alpha[t,], Tau.raw.alpha[,])
+Beta[t,1:3] ~ dmnorm (M.raw.beta[t,], Tau.raw.beta[,])
+
+#raw prior mean
+M.raw.alpha[t,1] <- mu.raw.alpha0
+M.raw.alpha[t,2] <- mu.raw.alpha1
+M.raw.alpha[t,3] <- mu.raw.alpha2
+M.raw.beta[t,1] <- mu.raw.beta0
+M.raw.beta[t,2] <- mu.raw.beta1
+M.raw.beta[t,3] <- mu.raw.beta2
+}
+
+#raw hyperprior means
+mu.raw.alpha0 ~ dnorm (0, 0.00001)
+mu.raw.alpha1 ~ dnorm (0, 0.00001)
+mu.raw.alpha2 ~ dnorm (0, 0.00001)
+mu.raw.beta0 ~ dnorm (0, 0.00001)
+mu.raw.beta1 ~ dnorm (0, 0.00001)
+mu.raw.beta1 ~ dnorm (0, 0.00001)
+
+#priors on the scaling factors
+xi.alpha0 ~ dunif (0, 100)
+xi.alpha1 ~ dunif (0, 100)
+xi.alpha2 ~ dunif (0, 100)
+xi.beta0 ~ dunif (0, 100)
+xi.beta1 ~ dunif (0, 100)
+xi.beta2 ~ dunif (0, 100)
+
+#rescaled hyperprior means
+mu.alpha0 <- xi.alpha0*mu.raw.alpha0
+mu.alpha1 <- xi.alpha1*mu.raw.alpha1
+mu.alpha2 <- xi.alpha2*mu.raw.alpha2
+mu.beta0 <- xi.alpha0*mu.raw.beta0
+mu.beta1 <- xi.alpha0*mu.raw.beta1
+mu.beta2 <- xi.alpha0*mu.raw.beta2
+
+#Wishart prior on raw precision matrix
+Tau.raw.alpha[1:3,1:3] ~ dwish (Omega.alpha[,], nu.alpha)
+Tau.raw.beta[1:3,1:3] ~ dwish (Omega.beta[,], nu.beta)
+
+#raw covariance matrix
+Sigma.raw.alpha[1:3,1:3] <- inverse(Tau.raw.alpha[,])
+Sigma.raw.beta[1:3,1:3] <- inverse(Tau.raw.beta[,])
+
+#rescaled standard deviation components
+sigma.alpha0 <- xi.alpha0*sqrt(Sigma.raw.alpha[1,1])
+sigma.alpha1. <- xi.alpha1*sqrt(Sigma.raw.alpha[2,2])
+sigma.alpha2 <- xi.alpha2*sqrt(Sigma.raw.alpha[3,3])
+sigma.beta0 <- xi.beta0*sqrt(Sigma.raw.beta[1,1])
+sigma.beta1 <- xi.beta1*sqrt(Sigma.raw.beta[2,2])
+sigma.beta2 <- xi.beta2*sqrt(Sigma.raw.beta[3,3])
+
+##############################
+
+#priors on the logistic regressions
+for(s in 1:3){
+gamma[s] ~ dnorm(0,0.0001)
+}
+for(k in 1:4){
+eta[k] ~ dnorm(0,0.0001)
+}
+
+}
