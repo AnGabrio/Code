@@ -8,6 +8,7 @@
 library(data.table) #package to handle datasets more efficiently
 library(bootstrap) #package to use bootstrap procedure 
 library(rlang)
+library(systemfit)
 boot_ec <- function(data, B, QALYreg, TCreg, method = "OLS",
                     profile_QALY="default", profile_TC="default", trt_pos = 2){
   #the following lines are needed to make sure proper inputs are given
