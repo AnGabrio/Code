@@ -150,7 +150,11 @@ boot_ci <- function(x, method = "perc", confidence = 0.95){
   }
   if(method == "BCa"){
     or_method <- x$inputs$method
-    data <- x$inputs$data
+    if(inherits(x, c("tsbootCE"))){
+      data <- x$inputs$shrunk_data
+    } else if(inherits(x, c("bootCE"))){
+      data <- x$inputs$data
+    }
     trt_pos <- x$inputs$trt_pos
     QALYreg <- x$inputs$QALYreg
     TCreg <- x$inputs$TCreg
@@ -160,7 +164,7 @@ boot_ci <- function(x, method = "perc", confidence = 0.95){
     profile_TC_int <- x$inputs$profile_TC_int
     #obtain avg BCa estimates based on original sample
     model_ec <- systemfit(list(QALYreg = QALYreg, TCreg = TCreg), 
-                          method=or_method, data=data)
+                          method=or_method, data=data)     
     avg_BCa_Delta_e <- summary(model_ec$eq[[1]])$coefficients[trt_pos,"Estimate"]
     avg_BCa_Delta_c <- summary(model_ec$eq[[2]])$coefficients[trt_pos,"Estimate"]
     avg_BCa_mu_e_ctr <- as.numeric(t(profile_QALY_ctr) %*% summary(model_ec$eq[[1]])$coefficients[,"Estimate"])
@@ -181,7 +185,7 @@ boot_ci <- function(x, method = "perc", confidence = 0.95){
     z0_mu_e_int <- qnorm(plower_mu_e_int, mean = 0, sd = 1, lower.tail = TRUE)
     z0_mu_c_ctr <- qnorm(plower_mu_c_ctr, mean = 0, sd = 1, lower.tail = TRUE)
     z0_mu_c_int <- qnorm(plower_mu_c_int, mean = 0, sd = 1, lower.tail = TRUE)
-    #apply jackknife sampling functions to get jeckknife estimates
+    #apply jackknife sampling functions to get jackknife estimates
     jk_res <- jk_ec(data = data, QALYreg=QALYreg,TCreg=TCreg,trt_pos=trt_pos,
                     profile_QALY_ctr=profile_QALY_ctr,profile_QALY_int=profile_QALY_int,
                     profile_TC_ctr=profile_TC_ctr,profile_TC_int=profile_TC_int,or_method=or_method)
@@ -221,8 +225,6 @@ boot_ci <- function(x, method = "perc", confidence = 0.95){
   res_list <- list("Delta_e"=ci_Delta_e,"Delta_c"=ci_Delta_c,"mu_e_ctr"=ci_mu_e_ctr,"mu_e_int"=ci_mu_e_int,"mu_c_ctr"=ci_mu_c_ctr,"mu_c_int"=ci_mu_c_int)
   return(res_list)
 }
-
-
 
 #function and needed packages to generate bootstrap estimates for mean QALY/TC and incremental
 #differences when running GLMs
@@ -420,7 +422,11 @@ boot_ci_glm <- function(x, method = "perc", confidence = 0.95){
     TC_dist <- x$inputs$TC_dist
     QALY_link <- x$inputs$QALY_link
     TC_link <- x$inputs$TC_link
-    data <- x$inputs$data
+    if(inherits(x, c("tsbootCE_glm"))){
+      data <- x$inputs$shrunk_data
+    } else if(inherits(x, c("bootCE_glm"))){
+      data <- x$inputs$data
+    }
     trt_pos <- x$inputs$trt_pos
     QALYreg <- x$inputs$QALYreg
     TCreg <- x$inputs$TCreg
@@ -757,6 +763,9 @@ tsboot_ec <- function(data, B, QALYreg, TCreg, method = "OLS", cluster, unbalclu
   #n covariates 
   nX_e <- dim(model.matrix(QALYreg, data))[2]
   nX_c <- dim(model.matrix(TCreg, data))[2]
+  #names covariates
+  cov_e <- all.vars(QALYreg)[-c(1,trt_pos)]
+  cov_c <- all.vars(TCreg)[-c(1,trt_pos)]
   #check that correct profile provided or set default
   if(profile_QALY != "default"){
     if(!is.vector(profile_QALY) | length(profile_QALY)!=nX_e){stop("provide valid profile for QALYreg")}}
@@ -790,7 +799,7 @@ tsboot_ec <- function(data, B, QALYreg, TCreg, method = "OLS", cluster, unbalclu
       clus.size <- table(data1[,cluster])
       cost.x <- tapply(data1[,TC_name],data1[,cluster],mean) # calc cluster means
       qaly.x <- tapply(data1[,QALY_name],data1[,cluster],mean) # calc cluster means
-      # STANDARDIZE Z: calc b for standardiwing z
+      # STANDARDIZE Z: calc b for standardising z
       a <- length(unique(data1[,cluster]))
       if (var(clus.size)==0){
         b <- unique(clus.size)
@@ -840,8 +849,16 @@ tsboot_ec <- function(data, B, QALYreg, TCreg, method = "OLS", cluster, unbalclu
     #copy trt levels if factor
     if(is_true(trt_fact)){ 
       shrunk.data[,trt_name_e] <- factor(shrunk.data[,trt_name_e], levels=sort(unique(shrunk.data[,trt_name_e])), labels = trt_lev)}
+    #order rows by trt levels
+    shrunk.data <- shrunk.data[with(shrunk.data,order(shrunk.data[,trt_name_e])), ]
+    #add original covariates 
+    cov_data <- data[,c(cov_e,cov_c,trt_name_e)]
+    cov_data <- cov_data[with(cov_data,order(cov_data[,trt_name_e])), ]
+    cov_data <- cov_data[ , !(names(cov_data) %in% trt_name_e)]
+    #add covariates to shrunk dataset
+    shrunk.data_all <- cbind.data.frame(shrunk.data,cov_data)
     #create a dt object
-    dataset_tsb.dt <- data.table(shrunk.data)
+    dataset_tsb.dt <- data.table(shrunk.data_all)
     #fit model
     model_ec <- systemfit(list(QALYreg = QALYreg, TCreg = TCreg), 
                           method=method, data=dataset_tsb.dt)
@@ -874,7 +891,7 @@ tsboot_ec <- function(data, B, QALYreg, TCreg, method = "OLS", cluster, unbalclu
   #create list objects to store all results 
   res_e_tsb_list <-list("Delta_e"=coeff_e,"mu_e_ctr"=em_e_ctr,"mu_e_int"=em_e_int)
   res_c_tsb_list <-list("Delta_c"=coeff_c,"mu_c_ctr"=em_c_ctr,"mu_c_int"=em_c_int)
-  input_list <- list("data"=data, "method"=method, "trt_pos"=trt_pos, "QALYreg"=QALYreg,
+  input_list <- list("data"=data, "shrunk_data"=dataset_tsb.dt,"method"=method, "trt_pos"=trt_pos, "QALYreg"=QALYreg,
                      "TCreg"=TCreg,"profile_QALY_ctr"=profile_b_QALY_ctr,
                      "profile_QALY_int"=profile_b_QALY_int,"profile_TC_ctr"=profile_b_TC_ctr,
                      "profile_TC_int"=profile_b_TC_int, "cluster"=cluster, "unbalclus"=unbalclus)
@@ -918,6 +935,9 @@ tsboot_ec_glm <- function(data, B, QALYreg, TCreg, QALY_dist, TC_dist,
   #n covariates 
   nX_e <- dim(model.matrix(QALYreg, data))[2]
   nX_c <- dim(model.matrix(TCreg, data))[2]
+  #names covariates
+  cov_e <- all.vars(QALYreg)[-c(1,trt_pos)]
+  cov_c <- all.vars(TCreg)[-c(1,trt_pos)]
   #extract name of trt indicator and outcomes from provided formula
   trt_name_e <- all.vars(QALYreg)[trt_pos]
   trt_name_c <- all.vars(TCreg)[trt_pos]
@@ -996,8 +1016,16 @@ tsboot_ec_glm <- function(data, B, QALYreg, TCreg, QALY_dist, TC_dist,
     #copy trt levels if factor
     if(is_true(trt_fact)){ 
       shrunk.data[,trt_name_e] <- factor(shrunk.data[,trt_name_e], levels=sort(unique(shrunk.data[,trt_name_e])), labels = trt_lev)}
+    #order rows by trt levels
+    shrunk.data <- shrunk.data[with(shrunk.data,order(shrunk.data[,trt_name_e])), ]
+    #add original covariates 
+    cov_data <- data[,c(cov_e,cov_c,trt_name_e)]
+    cov_data <- cov_data[with(cov_data,order(cov_data[,trt_name_e])), ]
+    cov_data <- cov_data[ , !(names(cov_data) %in% trt_name_e)]
+    #add covariates to shrunk dataset
+    shrunk.data_all <- cbind.data.frame(shrunk.data,cov_data)
     #create a dt object
-    dataset_tsb.dt <- data.table(shrunk.data)
+    dataset_tsb.dt <- data.table(shrunk.data_all)    
     #select and fit GLM based on distribution and link function (QALY)
     if(QALY_dist=="Beta"){
       glm_e <- betareg(QALYreg, data = dataset_tsb.dt, link = QALY_link)}
@@ -1042,7 +1070,7 @@ tsboot_ec_glm <- function(data, B, QALYreg, TCreg, QALY_dist, TC_dist,
   #create list objects to store all results 
   res_e_tsb_list <-list("Delta_e"=coeff_e,"mu_e_ctr"=em_e_ctr,"mu_e_int"=em_e_int)
   res_c_tsb_list <-list("Delta_c"=coeff_c,"mu_c_ctr"=em_c_ctr,"mu_c_int"=em_c_int)
-  input_list <- list("data"=data, "trt_pos"=trt_pos, "QALYreg"=QALYreg,
+  input_list <- list("data"=data, "shrunk_data"=dataset_tsb.dt,"trt_pos"=trt_pos, "QALYreg"=QALYreg,
                      "TCreg"=TCreg,"QALY_link"=QALY_link,"QALY_dist"=QALY_dist,
                      "TC_dist"=TC_dist,"TC_link"=TC_link,"cluster"=cluster, "unbalclus"=unbalclus)
   #compute overall list and return it as output from the function

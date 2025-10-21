@@ -124,7 +124,7 @@ confint(sur_ec, level = 0.95)
 
 #combine OLS/SUR with bootstrapping to obtain distributions of statistics of interest 
 #such as mean QALY/TC by arm and mean differences between groups
-source("code_functions.R") #this loads all pre-built functions stored in the R file called code_functions.R
+source("code_functions_test.R") #this loads all pre-built functions stored in the R file called code_functions.R
 #get bootstrap results (200 iterations)
 set.seed(2345)
 boot_res <- boot_ec(dataset, QALYreg = QALY ~ trt + u0,
@@ -213,22 +213,6 @@ mlm_em_delta_c <- contrast(mlm_c_em, diff_new_vs_old)
 confint(mlm_em_delta_e, level = 0.95)
 confint(mlm_em_delta_c, level = 0.95)
 
-#combine OLS/SUR with Two-stage bootstrapping to obtain distributions of statistics of interest 
-#such as mean QALY/TC by arm and mean differences between groups
-#get TSB results (200 iterations)
-set.seed(2345)
-tsboot_res <- tsboot_ec(data = dataset, QALYreg = QALY ~ trt + u0, 
-                        TCreg = TC ~ trt + c0, cluster = "cluster", B=200)
-summary(tsboot_res$QALY_boot$Delta_e)
-summary(tsboot_res$QALY_boot$mu_e_ctr)
-summary(tsboot_res$QALY_boot$mu_e_int)
-summary(tsboot_res$TC_boot$Delta_c)
-summary(tsboot_res$TC_boot$mu_c_ctr)
-summary(tsboot_res$TC_boot$mu_c_int)
-#compute percentile CIs (note: BCa CI not appropriate for tsboot results)
-tsboot_ci_perc <- boot_ci(x = tsboot_res, method = "perc")
-tsboot_ci_perc
-
 #combine MLM with bootstrapping to obtain distributions of statistics of interest 
 #such as mean QALY/TC by arm and mean differences between groups
 #get bootstrap results (200 iterations)
@@ -248,6 +232,22 @@ summary(boot_res_mlm$TC_boot$Delta_c) #mean difference
 boot_ci_bca_mlm <- boot_ci_mlm(x = boot_res_mlm, method = "BCa")
 #summarise output
 boot_ci_bca_mlm
+
+#combine OLS/SUR with Two-stage bootstrapping to obtain distributions of statistics of interest 
+#such as mean QALY/TC by arm and mean differences between groups
+#get TSB results (200 iterations)
+set.seed(2345)
+tsboot_res <- tsboot_ec(data = dataset, QALYreg = QALY ~ trt + u0, 
+                        TCreg = TC ~ trt + c0, cluster = "cluster", B=200)
+summary(tsboot_res$QALY_boot$Delta_e)
+summary(tsboot_res$QALY_boot$mu_e_ctr)
+summary(tsboot_res$QALY_boot$mu_e_int)
+summary(tsboot_res$TC_boot$Delta_c)
+summary(tsboot_res$TC_boot$mu_c_ctr)
+summary(tsboot_res$TC_boot$mu_c_int)
+#compute percentile or BCa CIs
+tsboot_ci_perc <- boot_ci(x = tsboot_res, method = "BCa")
+tsboot_ci_perc
 
 
 #VERSION 5: dealing with missing data
