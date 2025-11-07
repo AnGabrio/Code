@@ -1,0 +1,2050 @@
+---
+title: "Statistical methods for model-based HTA"
+subtitle: "Part I"
+description: ""
+author:
+  - name: Andrea Gabrio
+    url: https://angabrio.github.io/agabriosite2/
+    orcid: 0000-0002-7650-4534
+    email: a.gabrio@maastrichtuniversity.nl
+    corresponding: true    
+    affiliation: Maastricht University
+    affiliation-url: https://www.maastrichtuniversity.nl/research/methodology-and-statistics
+date: 2025-11-18
+bibliography: ref_code.bib
+#nocite: |
+#  @gabrio2017handling
+---
+
+This document provides the full code used to simulate some artificial model-based HTA data and implement different types of statistical methods to analyse them. The methods listed here are based on a selection made according to recommendations from the current literature [@el2022scoping] and national guidelines from the *ZorgInstituut Nederland*[@nederland2024guideline] about the statistical analysis of (empirical) trial-based health economic evaluations in the Netherlands. 
+
+The code is presented with some comments and brief descriptions using an HTML interface generated via [*quarto*](https://quarto.org/) and [*Rstudio*](https://posit.co/download/rstudio-desktop/) to ease accessibility. The raw \texttt{R} code is provided in a separate file in the same [GitHub repository](https://github.com/AnGabrio/Code/tree/master/RHTAmethods).
+
+# Decision Tree Models {#sec-dtm}
+
+## Basic elements
+
+Perhaps one of the simplest and most popular types of *decision-analytic models* in HTA is represented by **decision tree**[@briggs2006decision]. These are used to graphically display a tree structure in which alternative future possibilities are represented by distinct and mutually exclusive "branches". To introduce the underlying idea of decision trees, let's consider a simple example where two treatments are compared with a do-nothing option: "Trt A", "Trt B", and "None" (eg take no drugs). Each treatment has different costs and benefits in terms of chances that the drug is successful at treating a patient.  
+
+Within a decision tree, usually, there are different types of "nodes" which may have different interpretations:
+
+  - **Decision nodes**: these are places at the root of the tree (often represented as squares) from which a set of branches develop, each representing alternative treatment choices that patients may take.
+  
+  - **Chance nodes**: these are associated with an estimated probability (often represented as circles) which represents the chance of a random event to occur (eg whether a treatment was successful or not). 
+  
+  - **Terminal nodes**: these are placed at the end of each branch path (often represented as triangles and called *leaves*) and are associated with a given *value* (eg costs and/or benefits).
+
+The term "value" refers to the numbers attached to the nodes, which usually consist in cost ($c_i$) and benefit ($e_i$) measures associated to each node $i$. The term "probability" refers to the chance at a given node for a given random event to occur, and should therefore be considered as *conditional probabilities* denoted as $p_{ij}=p(x_j\mid x_i)$, representing the probability that the event $x_j$ occurs given an already occurred event $x_i$. Within a decision tree, the existence of conditional probabilities means that the probability of going through a branch depends on what occurred at a previous node. Given that all possible outcomes at a specific node need to be explicitly defined, this means that the probabilities on branches from a chance node must sum up to one.
+
+A decision tree is often used to describe underlying disease natural history and typical treatment outcomes as it allows to easily quantify the risks and payoffs associated with different courses of action [@caro2012modeling]. Essentially, decision trees show alternative clinical pathways where discrete decisions and related payoffs occur in sequence in short time frames. However, they are not well suited for simulations with considerable gaps between treatment decisions and realisation of the payoffs. In addition, the influence of time cannot be easily incorporated in decision trees. Finally, when the possibility of returning to past nodes is non-zero (eg recovery from illness after starting in an healthy state), this needs to be taken into account in the model. Although this might be possible to incorporate in a decision tree, the required increase in the number of nodes and general tree structure makes the adoption of alternative modelling approaches (eg Markov Models) more appropriate choices to simulate the disease progression.
+
+## Calculations
+
+The probabilities computed along each branch of the tree are conditional probabilities $p(x_j\mid x_i)$, which is important to remember when calculating the expected cost and benefit values associated to each end node. It is possible to think of a unique pathway from the root node until reaching a given terminal node, where at each encountered chance node one of the possible outcomes occurs. By chaining the conditional probabilities for a given pathway it is possible to obtain the total or *joint probability* of reaching a given terminal node. As an example, let's define $x$ as the event variable representing the occurrence of a pathway based on a tree with length $n$ nodes: 
+
+$$
+x_{[1]} \rightarrow x_{[2]} \rightarrow \cdots \rightarrow x_{[n]}
+$$
+where $x_{[1]}$ is the root node, $x_{[n]}$ is the terminal node, with the notation $x_{[i]}$ denoting the $i$-th ordered node in the sequence. We can express the joint probability of this path as the product of the conditional probabilities which sit on this path:
+
+$$
+p(x_{[1]},\ldots,x_{[n]})=p(x_{[2]}\mid x_{[1]}) \times \cdots \times p(x_{[n]}\mid x_{[n-1]})=\prod_{i=1}^{n-1}p(x_{[i+1]}\mid x_{[i]}).
+$$
+The corresponding cost and benefit values associated with this pathway would then correspond to the respective set of payoffs $c=(c_{[1]},\ldots,c_{[n]})$ and $e=(e_{[1]},\ldots,e_{[n]})$. Identifying the optimal pathway alongside a decision tree is often called *solving* the tree, which requires to calculate the expected values of each decision. In general, there are two approaches to achieve this.
+
+  1. **Backwards computation**. The first approach is to work backwards taking a weighted average of the total values of the successive (child) nodes of a given past (parent) node, where the weights are the probability to go through each branch to the child nodes. The expected value at node $i$ is given by:
+  
+$$
+\text{E}[V_i]=\Biggl\{ \begin{array}{cc}o_i & \text{if} \;\; i \in N_t\\ o_i+\sum_{j\in \text{child}(i)}p_{ij}\text{E}[V_j] & \text{otherwise} \end{array}
+$$
+where $\text{E}[\cdot]$ denotes the expected average of the values $o_i$ occurred at node $i$, $\text{child}(i)$ is the set of child nodes from node $i$, and $N_t$ is the set of all terminal nodes. Thus, $V_i$ is the total value at a node consisting of $o_i$ and the values of the child nodes along a trajectory. In short, starting at the terminal nodes the expected costs and benefits at each chance node are calculated in turn all the way back to the decision node. An advantage of using this approach is that total expected values can be obtained at each node and, in the presence of multiple decision nodes, it is possible to fold-back sub-trees.
+  
+  2. **Forward computation**. The second approach is to calculate total costs, benefits and joint probabilities along all of the distinct pathways of the tree corresponding to a decision. The weighted average of the costs and benefits give the expected value at the decision node:
+
+$$
+\text{E}[V]=\sum_{j=1}^m o_j^\star p_j^\star,
+$$
+where $o_j^\star=(o_{[1]},\ldots,o_{[n_j]})$ is the sum total of the values along each pathway for $j=1,\ldots,m$ and of length $n_j$, while $p_j^\star$ is the associated joint probability set of going through the path.
+
+Using the expected outcomes for different decisions calculated at the decision nodes in the tree, it is possible to determine the optimal course of action to obtain the maximum expected benefit. Expected outcomes are often expressed in terms of incremental means between two competing treatments in terms of some benefit measure (eg QALYs) $\Delta_e=\text{E}[e\mid \text{trt}_2]-\text{E}[e\mid \text{trt}_1]$ and costs $\Delta_c=\text{E}[c\mid \text{trt}_2]-\text{E}[c\mid \text{trt}_1]$. These quantities are then often combined in order to derive standard cost-effectiveness measures, such as the *Incremental Cost-Effectiveness Ratio* (ICER) and the *Incremental Net Monetary Benefit* (INMB), in combination with a pre-specified value for the *acceptance* or *willingness to pay threshold* (wtp) fixed by the decision maker to inform the decision about the relative cost-effectiveness of the competing treatments.
+
+## Sensitivity Analysis
+
+A final element that should be considered is the need to quantify the uncertainty around the modelling process, which is an indispensable component when conducting HTA [@briggs2012model]. This means that measures of uncertainty around point estimates, including probabilities, outcome values, etc..., need to be provided to better inform decision making. In the literature, uncertainty is often divided into two main groups: *stochastic* and *parameter*. Stochastic uncertainty relates to the uncertainty around a realisation at the individual level, while parameter uncertainty is associated with the uncertainty around the model input parameters. In general, HTA is primarily concerned with parameter uncertainty given that the focus is on population averages rather than at the individual level. 
+
+There are different approaches to explore the impact of uncertainty on the model results, an exercise often referred to as *sensitivity analysis*. A first approach, called **Deterministic Sensitivity Analysis** (DSA) consists in varying parameter values to test the sensitivity of the model outputs to specific sets of parameter values. Alternatively, a **Probabilistic Sensitivity Analysis** (PSA) varies all parameter values simultaneously by sampling them from probability distributions, and is often preferred to DSA since it allows to assess the impact of uncertainty around all relevant parameters in a joint way. In practice, conducting PSA means that for a given sequence of iterations $s=1,\ldots,S$, a value of all random inputs $\theta_{(s)}$ is simulated from a given distribution $p(\theta)$. The decision tree is then run with these values and a distribution for the expected incremental costs and benefits are calculated [@baio2015probabilistic]. That is, we obtain samples of pairs $(\Delta_e^{(s)},\Delta_c^{(s)})$, where $\Delta_e^{(s)}=\text{E}[e\mid \theta_{(s)}, \text{trt}_2]-\text{E}[e\mid \theta_{(s)},\text{trt}_1]$ and $\Delta_c^{(s)}=\text{E}[c\mid \theta_{(s)}, \text{trt}_2]-\text{E}[c\mid \theta_{(s)},\text{trt}_1]$.
+
+## Implementation in `R`
+
+In this section I will show how to implement a simple decision tree model in `R` using first a forward and then a backwards computation approach to generate the output under both a point value and PSA scenario.
+
+### Forward computation
+
+We start by setting the number of treatments and their names together with empty objects that will be filled with costs, benefits and probabilities of movement between nodes once calculations are performed.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#trt names and number
+trt_names <- c("Trt1","Trt2")
+n_trt <- length(trt_names)
+#objects to contain outcomes and probabilities
+c_success <- c_fail <- setNames(rep(NA, n_trt), trt_names)
+e_success <- e_fail <- setNames(rep(NA, n_trt), trt_names)
+p_success <- p_fail <- setNames(rep(NA, n_trt), trt_names)
+```
+
+Next, we fill in the created objects based on some external information (eg obtained from the literature)
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#assign values to each state and trt group
+
+#QALYs
+e_success["Trt1"] <- 35
+e_fail["Trt1"] <- 15
+e_success["Trt2"] <- 26
+e_fail["Trt2"] <- 22
+#Costs
+c_success["Trt1"] <- 15000
+c_fail["Trt1"] <- 35000
+c_success["Trt2"] <- 7000
+c_fail["Trt2"] <- 13000
+#for costs also add some initial costs
+c_init <- c("Trt1"=3000, "Trt2"=500)
+#probs
+p_success["Trt1"] <- 0.75
+p_fail["Trt1"] <- 1 - p_success["Trt1"] #events are mutually exclusive
+p_success["Trt2"] <- 0.93
+p_fail["Trt2"] <- 1 - p_success["Trt2"] #events are mutually exclusive
+
+#create empty objects to contain total outcomes
+c_tot <- e_tot <- setNames(rep(NA, n_trt), trt_names)
+c_delta <- e_delta <- setNames(rep(NA, n_trt), trt_names)
+```
+
+Once this is done, we can now perform the forward calculation.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#compute path joint probabilities
+p_star <- rbind(p_success,p_fail)
+#path total costs
+c_star <- cbind(c_init + c_success + c_fail)
+#path total QALYs
+e_star <- cbind(e_success + e_fail)
+
+#compute the sum of each product term to obtain total expected values
+
+#EV in terms of total costs and QALYs for each trt group
+sum(c_star["Trt1", ]*p_star[, "Trt1"])
+sum(c_star["Trt2", ]*p_star[, "Trt2"])
+sum(e_star["Trt1", ]*p_star[, "Trt1"])
+sum(e_star["Trt2", ]*p_star[, "Trt2"])
+```
+
+Given the simple structure of the decision tree, we may also obtain the total costs and QALYs for each group by directly writing the respective equations in vector format. Similarly, we can compute the incremental quantities assuming `Trt2` being the comparator and `Trt1` the reference intervention.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#for total costs c_init not in brackets since they apply to both pathways
+c_tot <- c_init + (p_success*c_success + p_fail*c_fail)
+e_tot <- (p_success*e_success + p_fail*e_fail)
+#incrementals
+c_delta <- c_tot["Trt1"]-c_tot["Trt2"]
+e_delta <- e_tot["Trt1"]-e_tot["Trt2"]
+```
+
+Finally, we can compute the ICER and INMB based on the incremental quantities, assuming a certain value for the acceptance threshold parameter $k$.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+k <- 20000 #wtp (costs per QALY gained)
+icer <- c_delta/e_delta
+inmb <- e_delta*k - c_delta
+```
+
+The ICER is $`r round(icer,0)`$ refers to the additional cost (eg in euros) per unit of QALY gained when using the reference treatment with respect to the comparator. Given that its value is below the assumed value for $k=`r k`$, then we may conclude that the reference intervention is cost-effective at the given $k$. Similarly, we may arrive to the same conclusion by looking at the INMB which is $`r round(inmb,0)`$: since its value is positive, at the assumed value for $k=`r k`$, we conclude that the reference intervention is cost-effective.
+
+Once the results from a point value scenario are derived (as we did so far), then it is important to extend the model to perform a PSA by replacing point estimates for outcomes and probabilities with $S$ random samples drawn from appropriate probability distributions. For this simple example, we will fix the probability point values associated with branches from chance nodes. We will instead draw cost and QALY samples from Gamma distributions centred around the point estimates used before, ie $\sim \text{Gamma}(\phi,\psi)$. For the given simulation size $S$, we can then obtain the draws $c_{\text{init},(s)}$ separately for the two treatments and for $s=1\ldots,S$ by typing  
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+S <- 200 #set total number of simulations
+
+#generate initial cost samples for each treatment
+c_init_psa <- rbind(
+  #choice of Gamma parameters here made to obtain distribution centred around means used before
+  #in practice these values need to be defined based on the context
+  "Trt1" = rgamma(n=S, shape = c_init["Trt1"]/500, scale = 500),
+  "Trt2" = rgamma(n=S, shape = c_init["Trt2"]/670, scale = 670)
+)
+#this results in a matrix with trt groups on rows and samples on columns
+```
+
+We can then create the other cost and QALY samples in the same way
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+c_success_psa <- rbind(
+  "Trt1" = rgamma(n=S, shape = c_success["Trt1"]/100, scale = 100),
+  "Trt2" = rgamma(n=S, shape = c_success["Trt2"]/60, scale = 60)
+)
+
+c_fail_psa <- rbind(
+  "Trt1" = rgamma(n=S, shape = c_fail["Trt1"]/200, scale = 200),
+  "Trt2" = rgamma(n=S, shape = c_fail["Trt2"]/110, scale = 110)
+)
+
+e_success_psa <- rbind(
+  "Trt1" = rgamma(n=S, shape = e_success["Trt1"]/0.3, scale = 0.3),
+  "Trt2" = rgamma(n=S, shape = e_success["Trt2"]/0.37, scale = 0.37)
+)
+
+e_fail_psa <- rbind(
+  "Trt1" = rgamma(n=S, shape = e_fail["Trt1"]/0.6, scale = 0.6),
+  "Trt2" = rgamma(n=S, shape = e_fail["Trt2"]/0.4, scale = 0.4)
+)
+
+```
+
+If vectorisation is done correctly, we may then use the same code as in the point value case to obtain total and incremental quantities.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#for total costs c_init not in brackets since they apply to both pathways
+c_tot_psa <- c_init_psa + (p_success*c_success_psa + p_fail*c_fail_psa)
+e_tot_psa <- (p_success*e_success_psa + p_fail*e_fail_psa)
+#incrementals
+c_delta_psa <- c_tot_psa["Trt1",]-c_tot_psa["Trt2",]
+e_delta_psa <- e_tot_psa["Trt1",]-e_tot_psa["Trt2",]
+```
+
+In comparison with the point value case shown before, we now calculate standard HTA measures by taking the average of the incrementals across the $S$ samples generated.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+icer_psa <- mean(c_delta_psa)/mean(e_delta_psa)
+inmb_psa <- mean(e_delta_psa)*k - mean(c_delta_psa)
+```
+
+The ICER is now estimated as $`r round(icer_psa,0)`$ while the INMB is $`r round(inmb_psa,0)`$, therefore still suggesting the cost-effectiveness of the reference treatment, on average. However, one of the main reasons to perform PSA is precisely to assess the level of uncertainty around this conclusion, which is only based on average values. Using the $S$ samples for both incremental quantities, we can now produce standard HTA probabilistic outputs such as the *cost-effectiveness plane* (CE plane) and the *cost-effectiveness acceptability curve* (CEAC) to better inform the decision maker about the *chance* that the reference intervention is cost-effective, for a given or a range of values of the acceptance threshold parameter. These graphs can be easily drawn using functions from the `R` package `BCEA`. As an example, CE plane and CEAC plots may be computed using the following commands
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false
+#| code-fold: "show"
+#| layout-ncol: 2
+#| label: fig-1
+
+library(BCEA) #load package
+#use main function to generate CEA output
+bcea_cea <- bcea(eff=t(e_tot_psa), cost=t(c_tot_psa), interventions = c("Trt1","Trt2"), ref=1)
+
+#scatter plot of delta_e and delta_c with assumed value k for wtp
+#points in shaded area  / total points = prob of cost-effectiveness at k
+ceplane.plot(bcea_cea, wtp = k)
+
+#prob of cost-effectiveness for a range of wtp values
+ceac.plot(bcea_cea)
+```
+
+## Backwards computation
+
+Because the backwards computation of a decision tree is a recursive process, we will use a recursive function to apply this approach. This might seem less clear compared to a forward approach but it has the advantage of facilitating solutions of decision trees that are more complex. The remainder of the code for this section will be folded as it is just an alternative way to implement decision trees, but the interested reader is free to open the folded parts contained in this section to see how the backwards computation may also be performed.
+
+In `R`, backwards computation can be achieved through two alternative methods: an *adjacency matrix* or *adjacency list*, the choice depending on the structure of the tree under consideration. In the following example, an adjacency list will be used, where the list names and associated vectors denote the parent node indices of the tree. In `R`, we begin by defining the tree structure as follows:
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: true
+
+#define tree
+tree <- list("1"=c(2,3), #root node
+             "2"=c(), #terminal node
+             "3"=c()) #terminal node 
+
+tree
+```
+
+where the `tree` object represents the information that node 1 has children nodes 2 and 3, while nodes 2 and 3 have no children (ie they are terminal nodes). Next, we provide the probabilities, costs and QALYs for this tree by creating a list of data frames, separately by treatment group, which are meant to contain information about "node", "probability", and "value". This is needed in order to loop over different treatment scenarios through the recursive function.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: true
+
+#define data frames for nodes, probs and outcomes for each trt group
+#re-use success and fail vectors from previous method to define elements of data frames
+#costs
+data_c_recur <- list(
+  "Trt1"= data.frame(
+    node=1:3, #node index
+    prob=c(NA,p_success["Trt1"], p_fail["Trt1"]),  #prob of success-fail at each node
+    vals=c(c_init["Trt1"],c_success["Trt1"],c_fail["Trt1"]) #values for each node
+  ),
+  "Trt2"= data.frame(
+    node=1:3,
+    prob=c(NA,p_success["Trt2"], p_fail["Trt2"]),  
+    vals=c(c_init["Trt2"],c_success["Trt2"],c_fail["Trt2"])
+  )  
+)
+#QALYs
+data_e_recur <- list(
+  "Trt1"= data.frame(
+    node=1:3,
+    prob=c(NA,p_success["Trt1"], p_fail["Trt1"]),  
+    vals=c(0,e_success["Trt1"],e_fail["Trt1"])
+  ),
+  "Trt2"= data.frame(
+    node=1:3,
+    prob=c(NA,p_success["Trt2"], p_fail["Trt2"]),  
+    vals=c(0,e_success["Trt2"],e_fail["Trt2"])
+  )  
+)
+```
+
+For example, the cost list of data frames (one for each treatment group) looks something like this.
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+data_c_recur
+```
+
+Note that the root node is assigned a probability of `NA` in the code, since it has no preceding nodes. Next, the recursive function needs to be coded for calculating the expected values at a node, and here this is done by assuming a binary tree structure (ie success/failure chance at each node). The function `ev_rec()` takes the current node, tree structure and data for the values and probabilities as inputs and checks whether the current node is a terminal one. If this is true, the function returns the value at the node; otherwise the function calculates, recursively for each child node, the expected value of the children nodes and returns the sum of the current node and the weighted sum of the expected values of the children nodes
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: true
+
+#define function
+ev_rec <- function(node, tree, data){
+  #if terminal node return 0
+  if(is.na(node)){
+    return(0)
+  }
+  #else
+  #extract values at current node
+  c_node <- data$vals[data$node==node]
+  #check tree structure starting from current node
+  child <- tree[[node]]
+  #if terminal node return current node 
+  if(is.null(child)){
+    return(c_node)
+  } else { 
+    #else extract probs along each branch (binary tree structure)
+    pL <- data$prob[data$node==child[1]] #left branch
+    pR <- data$prob[data$node==child[2]] #right branch
+    #check for NA values and if so set probs to 0
+    if(any(is.na(pL))) {pL <- 0}
+    if(any(is.na(pR))) {pR <- 0}
+    #re-apply the function to children from current node and return sum of values from current node
+    #along the branches of the tree until a terminal node is found
+    return(c_node+
+             pL*ev_rec(child[1],tree,data) +
+             pR*ev_rec(child[2],tree,data)
+           )
+  }
+}
+```
+
+When applied to out simple example, the application of `ev_rec()` to the tree object defined in `tree` produces, at the first iteration, the cost at the starting node together with the probabilities (of success and failure) associated with the current node's children. The current cost is then added to the weighted mean of the expected costs of the two children nodes. These expected costs are calculated in the same way as for the starting node, thus producing a recursive procedure. This continues until a node without children is found (terminal node), for which only the current costs are returned since the weighted costs of the children (none) are set to 0. 
+
+We apply the recursive function separately for costs and QALYs, passing the data for the particular branch values
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: true
+
+root <- names(tree)[1] #index of root node
+
+#define empty objects to contain outcomes computed recursively
+c_tot_recur <- e_tot_recur <- setNames(
+  vector(mode="numeric", length = 2L),
+  c("Trt1","Trt2")
+)
+
+#apply function to extract total cost and QALY outcomes by trt group from the tree using recursive function and store results into new objects
+for(i in 1:2){
+  c_tot_recur[i] <- ev_rec(node = root, tree, data_c_recur[[i]]) 
+  e_tot_recur[i] <- ev_rec(node = root, tree, data_e_recur[[i]]) 
+}
+```
+
+We can alternatively calculate the total cost and QALYs for both treatment groups in a single step by looping over the inputs. Although this can also be done using base `R` commands, here we use the function `map_dbl()` from the `purrr` package to facilitate the looping through the list of inputs. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: true
+
+library(purrr) #load package
+#loop over cost and QALY inputs for each node in the tree 
+#computed recursively using the ev_rec function 
+c_tot_rec <- map_dbl(
+  #inputs: value data frames by group recursive function
+  #~ and . used to tell that function is applied to each output produced by itlsef at previous node
+  data_c_recur, ~ ev_rec(node=root, tree, .) 
+)
+e_tot_rec <- map_dbl(
+  data_e_recur, ~ ev_rec(node=root, tree, .)
+)
+```
+
+Next, using these outcomes, we can calculate the incremental costs and QALYs, and any other HTA measures (eg ICER), as we did in the forward computation approach.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: true
+
+c_delta_rec <- c_tot_recur["Trt1"] - c_tot_recur["Trt2"]
+e_delta_rec <- e_tot_recur["Trt1"] - e_tot_recur["Trt2"]
+icer_rec <- c_delta_rec/e_delta_rec
+```
+
+The ICER is $`r round(icer_rec,0)`$ as computed using the forward approach. Finally, as done for the forward computation approach, I also provide below the code (folded) for embedding the recursive computation within a Monte Carlo sampling procedure to produce the output needed for a PSA. To make things simple, I have re-used the same PSA samples generated for the forward approach for $S=`r S`$ and assuming point values for all movement probabilities between nodes. Since I used the same PSA samples generated for the forward approach, the same CE results will be produced (eg ICER value based on PSA samples).
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: true
+
+#apply recursive computation for PSA
+
+#step 1: generate cost and QALY samples for each treatment using appropriate distributions for a given number of iterations S and create 2xS matrix objects to contain the samples. Here I re-use the same objects created for the forward computation PSA example using Gamma distributions, namely: c_init_psa, c_success_psa, c_fail_psa, e_success_psa, e_fail_psa 
+
+#step 2: define empty Sx2 matrix objects to contain outcomes computed recursively for each treatment at each iteration of the PSA procedure
+c_tot_recur_psa <- e_tot_recur_psa <- matrix(NA,nrow = S, ncol = 2, dimnames = list(NULL, c("Trt1", "Trt2")))
+
+#step 3: embed the recursive procedure applied for the point value case within a loop going over the S PSA iterations and store the results in the outcome matrix objects created before 
+for(s in 1:S){ #loop over PSA iterations
+  data_c_recur <- list(
+  "Trt1"= data.frame(
+    node=1:3, #node index
+    prob=c(NA,p_success["Trt1"], p_fail["Trt1"]),
+    vals=c(c_init_psa["Trt1",s],c_success_psa["Trt1",s],c_fail_psa["Trt1",s]) 
+  ),
+  "Trt2"= data.frame(
+    node=1:3,
+    prob=c(NA,p_success["Trt2"], p_fail["Trt2"]),  
+    vals=c(c_init_psa["Trt2",s],c_success_psa["Trt2",s],c_fail_psa["Trt2",s])
+  )  
+)
+data_e_recur <- list(
+  "Trt1"= data.frame(
+    node=1:3,
+    prob=c(NA,p_success["Trt1"], p_fail["Trt1"]),  
+    vals=c(0,e_success_psa["Trt1",s],e_fail_psa["Trt1",s])
+  ),
+  "Trt2"= data.frame(
+    node=1:3,
+    prob=c(NA,p_success["Trt2"], p_fail["Trt2"]),  
+    vals=c(0,e_success_psa["Trt2",s],e_fail_psa["Trt2",s])
+  )  
+)
+#apply function to extract total cost and QALY outcomes by trt group from the tree using recursive function and store results into new objects for each PSA sample s and treatment group i
+for(i in 1:2){
+  c_tot_recur_psa[s,i] <- ev_rec(node = root, tree, data_c_recur[[i]]) 
+  e_tot_recur_psa[s,i] <- ev_rec(node = root, tree, data_e_recur[[i]]) 
+}
+}
+#step 4: compute cost and QALY incrementals for each PSA sample
+c_delta_rec_psa <- c_tot_recur_psa[,"Trt1"] - c_tot_recur_psa[,"Trt2"]
+e_delta_rec_psa <- e_tot_recur_psa[,"Trt1"] - e_tot_recur_psa[,"Trt2"]
+#compute ICER based on S PSA samples as ratio of mean incrementals
+icer_rec_psa <- mean(c_delta_rec_psa)/mean(e_delta_rec_psa)
+```
+
+
+## Conclusions
+
+Decision trees are not appropriate where the disease exhibits long latencies after a clinical intervention or where conditions require multiple interventions over extended times. In these cases, it is indeed quite restrictive to assign an instantaneous cost and outcome after each chance node since these variables may not be observed for some time and many "not modelled" variables may affect the ultimate value of the outcomes. 
+
+The influence of time is not easily represented in decision trees, with patients that progress through the tree in an unidirectional way with movements "back and forth" over the branches that is not allowed. This feature prevents to account for disease recurrence, which may instead be quite important in some clinical contexts. Although in principle the structure of the tree can be adjusted to account for these events and possibilities, as the complexity of the tree increases its adoption becomes inefficient and the interpretation of the results more challenging. In practice, alternative models, known as **Markov models** or **Discrete Event Simulations** are more appropriate to handle these features. In any case, a decision tree may still be useful, especially when combined with other types of models, eg using a tree to describe the pathway of diagnostic tests whose results are then "fed" into a larger population model. 
+
+Within HTA, decision trees are suited for modelling diagnostic technologies and screening programmes, with false positives, true positives, etc... that could be each nodes flowing from the parent node to denote a given intervention. In short, the use of decision trees is recommended for only those contexts where time dependency and long-term disease processes or outcomes are not relevant[@yang2019use]. In these cases, alternative decision-analytic approaches are more appropriate. 
+
+# Markov Models in Discrete Time {#sec-mmd}
+
+## Introduction to Markov Models
+
+When the context of the analysis makes the use of decision tree inappropriate or inefficient, cohort **Markov models** offer a valid alternative, especially for simulating diseases/treatments with long-term consequences and repeating events [@briggs2006decision;@siebert2012state]. A key characteristic of Markov models is their ability to simulate the nature of disease progression and estimate the expected costs and benefits under the assumption that the disease can be characterised in terms of *health states*. These states must be collectively exhaustive and mutually exclusive, which means that individuals cannot be in more than one state.    
+
+The numbers of health states and the structure of the Markov model linking these states is often graphically represented using *state-transition diagrams*, which typically display the states as squares with arrows them denoting movements (called *transitions*) allowed between them. As a simple example, let's consider a model with four states: three related to different levels of disease progression (Mild, Moderate, Severe) and one related to death (Dead). Assume also that, within this model, patients in a given health state are only allowed moving either to more severe states or death. Such model is referred to as *irreversible* given that, once a patient falls in a "more progressed" state, they can no longer move back to previous states. A different type of model would apply if patients are also allowed to move back and forwards between different progression states, which would be more appropriate when modelling diseases characterised by the chance of remission and/or relapse for the patients. In both types of models, transitions from the Dead to other states are not allowed and the death state is referred to as an *absorbing* state.
+
+To illustrate how a Markov model can be implemented in `R`, we will create an hypothetical example about colon cancer, with the objective of the health economic analysis being to assess the cost-effectiveness of two post-surgical therapies. In this context, we assume a total of three alternative treatment options are compared: 1) *No treatment* (None); 2) *Drug A* (A); 3) *Drug A+B* (AB). We will develop a cohort Markov model to address this research question and focus on the key elements and concepts for implementing such model in `R`.
+
+### Example
+
+The first step consists in defining the number and names of the alternative treatment options in objects in the `R` workspace
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+n_trt <- 3 #n of treatments
+trt_names <- c("None","A","AB") #names of treatments
+```
+
+Next, we will load a few `R` packages which can facilitate the implementation of the model compared to only using basic `R` commands. The exact functionality for these packages will become clear as we go through the code but, for the interested readers, two popular packages often used to implement Markov models in `R` are `heemod` and `hesim` [@filipovic2016markov;@incerti2021hesim]. In this document, we will still mostly use basic `R` commands to illustrate through a step-step process how the model can be constructed and the meaning of the different elements at the basis of the code. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+library(heemod)
+library(BCEA)
+library(MASS)
+library(survival)
+library(flexsurv)
+library(diagram)
+```
+
+The following health states are used to describe the disease progression in colon cancer, mostly distinguished based on the different costs and benefits associated with them: 1) *Recurrence-free*; 2) *Recurrence*; 3) *Dead (all cause)*; 4) *Dead (cancer)*. We can write up into `R` objects the information about the number of states in the model and their names by typing
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+n_state <- 4 #n of health states
+state_names <- c("Recurrence-free","Recurrence",
+                 "Dead(all cause)","Dead(cancer)") #names of states
+```
+
+We then need to define what are the allowed transitions in the model between the assumed states. For example, we may consider an irreversible Markov model with the following disease progression: 
+
+  - individuals start in the Recurrence-free state from which they can move either to Recurrence, Dead(all cause), or Dead(cancer); 
+  - individuals in the Recurrence state cannot not transition back to Recurrence-free and can only move to one of the death states; 
+  - individuals in either the Recurrence-free or Recurrence state are allowed to remain in the current state over time;
+  - both death states are absorbing.
+
+At this point, a key element to define is the value of the transition probabilities which define the chance for individuals to move between states alongside the allowed transition paths. The probabilities are often organised into so-called *transition matrices*, where rows denote the current health state of the individual and columns those to which they can transition. The `heemod` package provides a useful feature to graphically display the assumed structure of a Markov model, including information about health states and transition probabilities. As an example, we may use the following lines to encode and plot the model structure in `R` using `heemod` functions:
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+#| label: fig-2
+
+#object containing info about state names and transition probabilities between states
+state_diagram <- 
+  define_transition(
+    state_names = state_names,
+    X1, X2, X3, 0, #assign different X values to each transition prob
+    0, X4, X5, X6,
+    0, 0, X7, 0,
+    0, 0, 0, X8
+  ) 
+#plot diagram of the model
+plot(state_diagram, 
+     box.size=0.12,relsize=0.75,self.cex=0.5) #aestetics info
+```
+
+### General features of cohort Markov models
+
+A distinction needs to be made between *continuous* and *discrete* time models according to whether the transitions between states can occur at any time along a continuous interval or only at discrete time points (eg monthly). In the context of state-transition models, these discrete time points are often referred to as *cycles* and their duration is mainly determined by the nature of the disease/intervention considered. In particular, the chosen duration or *cycle's length* must be sufficiently short to capture relevant events. In practice, individuals can transition between states in a continuous time but, provided that the cycle length is adequately chosen with respect to the context of the analysis, the bias introduced by discretising time may be acceptable. In general, it is possible to reduce this bias by choosing shorter duration but this needs to be balanced against the need for highly disaggregated data to reliably estimate transition probabilities between states. Currently, we focus on discrete time Markov models to introduce the topic in a relatively simple analysis context.
+
+After each cycle (eg annual), individuals are associated with probabilities of transitioning to certain states which, in @fig-2, are denoted with different X values. The number of cycles corresponds to the time horizon of the model which, for many models dealing with long-term diseases, is often set to a value covering the entire lifetime horizon of the individuals [@national2022nice;@nederland2024guideline]. For our example related to colon cancer patients, we will set the time horizon of the model to $50$ years.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+n_cycle <- 50 #n of cycles
+```
+
+Transition between states in a discrete time Markov model are governed by probabilities while those in continuous time model by *rates*, which are defined as instantaneous measures ranging from zero to infinity. Rates are used to describe the number of transitions between states for a given number of individuals per unit of time, while probabilities describe the likelihood that an individual will transition between states in a given time period (cycle length) and ranges between zero and one. It is possible to use published transition probabilities in the model but it is possible that a given transition probability cannot be found for a specific cycle length. In these cases, it is possible to transform probabilities from one time frame to another [@briggs2006decision]. As an example, consider a $5$-month probability for a given transition is reported in the literature but that the assumed model uses a $1$-month cycle length. Assuming a constant rate over time, we can convert a $5$-month rate into a $1$-month rate through simple division (ie divide by $5$) but we cannot use the same approach when dealing with probabilities. However, under an assumption of constant rate of event and two events only, we can convert a rate $r$ into a corresponding probability $p$ over the time frame $t$ using the following formula:
+
+$$
+p(t) = 1-e^{-rt}.
+$$
+If we need to change the time frame of a probability, we first need to convert said probability into a rate over the re-scaled time frame using the formula
+
+$$
+r(t) = -\frac{\log(1-p)}{t},
+$$
+and then convert it back to a probability. The following code shows how to perform these steps for converting a $5$-month probability to a $1$-month probability 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+p_5m <- 0.5 #5-month prob
+t_5m <- 5 #initial time frame of 5 months
+r_1m <- -log(1-p_5m)/t_5m #convert to 1 month rate
+t_1m <- 1 #desired time frame of 1 month
+p_1m <- 1 - exp(-r_1m*t_1m)
+```
+
+Another commonly reported statistics for events are *odds* and *odds ratios*, where the odds of an event correspond to the ratio of the probability of the event $p$ occurring and its complement
+
+$$
+\text{odds}=\frac{p}{(1-p)}.
+$$
+Odds ratios, often defined for some treatment $1$ with event probability $p_1$ compared to some treatment $2$ with probability $p_2$, are defined as the ratio of the corresponding odds
+
+$$
+\text{OR}=\frac{p_1/(1-p_1)}{p_2/(1-p_2)}.
+$$
+It is possible to convert log(odds) to the probability scale over the same time frame using the inverse of the logistic function, while a probability can be converted to the log(odds) scale using the logistic function. The following code shows some two functions to perform this tranformation
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#function to convert log(odds) to probs
+invlogit <- function(logodds){
+  p <- (exp(logodds)/(1+exp(logodds)))
+  return(p)
+}
+
+#function to convert probs to logodds
+logit <- function(p){
+  logodds <- log(p/(1-p))
+  return(logodds)
+}
+```
+
+Markov models are characterised by a property called the *Markov assumption*, under which the movement of an individual from their current state to a future one, conditional on both past and present states, depends only on the current state of the individual and not on the past states [@jackson2011multi]. A *semi-Markov model* relaxes this assumption by allowing transition rates to depend also on the time spent in the current state, often referred to as *sojourn time*. In addition, Markov or semi-Markov models can be implemented at the cohort or individual level, where the former simulate a closed group of individuals who is assumed to be homogeneous, whereas the latter allows the cohort to be heterogeneous [@krijkamp2018microsimulation]. Here we will only focus on cohort Markov models to ease the presentation of basic elements and concepts related to model construction and implementation. 
+
+## Time-homogeneous Markov model
+
+When setting up the transition probabilities between model states it is important to decide whether they are assumed to remain constant at each cycle (*time-homogeneous*) or they are allowed to change over time (*time-inhomogeneous*). We will start coding the model using an array to assign memory for the transition between states for each treatment under a time-homogeneous assumption. The transition matrix has dimension $4\times 4$, where rows need to sum up to one (mutually exclusive and exhaustive states) and the impossibility of transitioning from one state to another is encoded through a zero probability value. The following code shows how the matrix can be constructed for the example considered as well as how its probability entries can be filled in (using appropriate values from the literature). 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#create empty trans matrix objects for each treatment option  (homogeneous model)
+trans_matrix_homo <- array(
+  dim = c(n_trt, n_state, n_state), #dimensions (3 x 4 x 4)
+  dimnames = list(trt_names, state_names, state_names) #names of each dimension
+)
+#probs for None from Recur-free to each of the 4 model states (itself, Recur, dead-all,dead-cancer)
+trans_matrix_homo["None", "Recurrence-free", ] <- c(NA, 0.063, 0.12, 0)
+#probs for None from Recur to each of the 4 model states (Recur-free,itself, dead-all,dead-cancer)
+trans_matrix_homo["None", "Recurrence", ] <- c(0, NA, 0.12, 0.43)
+#probs for None from Dead-all to each of the 4 model states (Recur-free,Recur, itself,dead-cancer)
+trans_matrix_homo["None", "Dead(all cause)", ] <- c(0, 0, NA, 0)
+#probs for None from Dead-cancer to each of the 4 model states (Recur-free,Recur, dead-all,itself)
+trans_matrix_homo["None", "Dead(cancer)", ] <- c(0, 0, 0, NA)
+
+#do the same for Trt A
+trans_matrix_homo["A", "Recurrence-free", ] <- c(NA, 0.068, 0.12, 0)
+trans_matrix_homo["A", "Recurrence", ] <- c(0, NA, 0.12, 0.39)
+trans_matrix_homo["A", "Dead(all cause)", ] <- c(0, 0, NA, 0)
+trans_matrix_homo["A", "Dead(cancer)", ] <- c(0, 0, 0, NA)
+
+#do the same for Trt AB
+trans_matrix_homo["AB", "Recurrence-free", ] <- c(NA, 0.048, 0.12, 0)
+trans_matrix_homo["AB", "Recurrence", ] <- c(0, NA, 0.12, 0.27)
+trans_matrix_homo["AB", "Dead(all cause)", ] <- c(0, 0, NA, 0)
+trans_matrix_homo["AB", "Dead(cancer)", ] <- c(0, 0, 0, NA)
+
+#ensure row sum up to 1
+#fill in NAs (prob of remaining in state) as 1 - sum of probs on the same row for same treatment option
+for(i in 1:length(state_names)){
+  trans_matrix_homo[, i, i] <- 1 - rowSums(trans_matrix_homo[, i, -i])
+}
+
+#check matrix entries for a given trt (eg None)
+trans_matrix_homo["None", , ]
+
+#check that each row sums up to 1 for each trt and state
+apply(trans_matrix_homo, c(1), rowSums)
+```
+
+Another key element of Markov models is the *Markov trace*, which provides information about how the cohort is proportionally distributed across the states at each cycle. In our example, since everyone starts in the Recurrence-free state, the Markov trace of the model will show a value of $1$ in this state for all treatments, suggesting that $100\%$ of the cohort is in this state at the start and $0\%$ in all other states. Over time individuals will transition to other states, thus causing the proportion to change, with typically the majority of the cohort ending in the dead states. The Markov trace is generated using the transition probabilities to calculate movements between states at each cycle over the time horizon. In particular, given initial proportions for the cohort $\pi_0$, successive proportions at cycle $t+1$ $\pi_{t+1}$ are calculated using the transition matrix $P$ and $\pi_{t}$ via matrix multiplication:
+
+$$
+\pi_{t+1}=\pi_tP.
+$$
+
+This product, in `R` obtained using the command `%*%`, allows to calculate which proportion of individuals will make a transition from their current state to the other states and sum this result to get the overall proportion of each state at the end of the cycle. This will provide the distribution of individuals transitioning from their current state to other states. Looking at the Markov trace allows to check how the model behaves compared to the expected clinical context being simulated. In our example, we can calculate the Markov trace by typing:
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#proportion in each state at cycle 1 for a given trt (eg None)
+pcohort_first <- c(1, 0, 0, 0) 
+#compute updated proportion at cycle 2 in same trt
+pcohort_second <- pcohort_first %*% trans_matrix_homo["None", ,]
+#compute updated proportion at cycle 3 in same trt
+pcohort_third <- pcohort_second %*% trans_matrix_homo["None", ,] 
+#etc... for successive cycles
+```
+
+To avoid repeating the same code for each model cycle and treatment, we can compute the entire Markov trace in `R` by looping over cycles and treatments 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#assign cycle names (from 0 up to n_cycle)
+cycle_names <- paste("Cycle", 0:(n_cycle-1), sep = " ")
+#zero-filled array 
+Mtrace_homo <- array(
+  0, dim = c(n_trt, n_cycle, n_state), #n trt x n cycles x n states
+  dimnames = list(trt_names, cycle_names, state_names) #assign names to each dimension
+)
+
+#all individuals start in cycle 0 in Recurrence-free state
+Mtrace_homo[, 1, "Recurrence-free"] <- 1
+
+#calculate trace entries at each cycle for each trt and state by looping product between trans matrix and value of trace at each cycle over cycles and trts
+for(i_cycle in 1:(n_cycle-1)){
+  for(i_trt in 1:n_trt){
+    Mtrace_homo[i_trt, i_cycle+1, ] <- Mtrace_homo[i_trt, i_cycle, ] %*% trans_matrix_homo[i_trt, , ]
+  }
+}
+#check that rows of trace at each cycle sum to 1
+apply(Mtrace_homo, c(1), rowSums)
+```
+
+In cohort Markov models, costs are typically simulated by associating them with each state rather than with each transition. In our example, the cost of one state (eg Recurrence-free) represents the on-going cost of having had a recurrence, rather than the one-off cost of the recurrence event itself. In such case, it is generally more plausible to associate the cost of recurrence with the Recurrence-free state but weight it by the probability of recurrence, thus producing on average the cost of recurrence events. This is shown in the following code, where the one-off cost of recurrence is counted in the Recurrence-free state, thus requiring to set to zero the cost of the recurrence state at each cycle. Similarly, the cost of the dead states at each cycle is set to zero. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#create zero-filled array for containing costs for each state and treatment
+state_c <- array(0, dim=c(n_trt, n_state),
+                 dimnames = list(trt_names, state_names))
+#set costs for recurrence-free state as cost of recurrence weighted by prob of recurrence from trans matrix for each treatment
+state_c[, "Recurrence-free"] <- trans_matrix_homo[, "Recurrence-free", "Recurrence"] * 35000
+#set other costs to zero
+state_c[, "Recurrence"] <- 0
+state_c[, "Dead(all cause)"] <- 0
+state_c[, "Dead(cancer)"] <- 0
+
+#show state and trt specific costs
+state_c
+```
+
+Utilities can also be assigned to each state by multiplying each of these by the cycle length to obtain the associated QALYs accrued from spending one cycle in each state. When the cycle length is one year, as in our case, cycle-specific utilities and QALYs coincide.  
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#create NA-filled array for containing utilities for each state
+state_e <- array(, dim=c(n_state), dimnames = list(state_names))
+#set utilities for all states
+state_e["Recurrence-free"] <- 0.8
+state_e["Recurrence"] <- 0.6
+state_e["Dead(all cause)"] <- 0
+state_e["Dead(cancer)"] <- 0
+
+#show state and trt specific costs
+state_e
+```
+
+When applicable, treatment-specific costs and QALYs loss should be added to the totals on each strategy. In our case, toxicity events lead to costs and disutilities which need to be added to the treatment outcomes. Toxicity probabilities differ by treatment and are used to calculate average costs and/or disutilities due to these toxicity events. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#prob of toxicity on each trt
+p_tox_A <- 0.2
+p_tox_AB <- 0.4
+cost_tox <- 2000
+disu_tox <- -0.1
+
+#empty objects to contain costs and QALYs by trt
+trt_cost <- array(dim=c(n_trt), dimnames = list(trt_names))
+trt_qaly <- array(dim=c(n_trt), dimnames = list(trt_names))
+#assign costs by trt
+trt_cost["None"] <- 0
+trt_cost["A"] <- 5000 + p_tox_A*cost_tox
+trt_cost["AB"] <- 10000 + p_tox_AB*cost_tox
+#assign qalys by trt
+trt_qaly["None"] <- 0
+trt_qaly["A"] <- p_tox_A*disu_tox
+trt_qaly["AB"] <- p_tox_AB*disu_tox
+
+#show values
+trt_cost
+trt_qaly
+```
+
+The object `Mtrace_homo` is an array containing the proportions of the cohort in each of the $4$ states of the model, for $3$ treatments and over $50$ cycles. Given that the time horizon of the model goes beyond $1$ year, when computing total costs and QALYs we need to discount these outcomes at the recommended annual rate, which is typically set at the national level by HTA authorities. In the Netherlands, the indicated annual rate is $3\%$ for costs and $1.5\%$ for QALYs. We can generate the main results by implementing the Markov model across each treatment and using the Markov trace to generate discounted total outcomes summed over states and cycles. As an example, the following code shows how this can done. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#set annual discount factor
+disc_c <- 0.03 #3% for costs
+disc_e <- 0.015 #1.5% for QALYs
+#generate discounted rates at each cycle over the entire time horizon of the model
+disc_c_seq <- 1/((1+disc_c)^(rep(1:n_cycle)))
+disc_e_seq <- 1/((1+disc_e)^(rep(1:n_cycle)))
+
+#assign memory of costs and QALYs for each trt in each cycle and total costs and QALYs for each trt
+#create empty objects to contain treatment and cycle-specific costs and QALYs computed across states
+cycle_c <- array(
+  dim=c(n_trt, n_cycle),
+  dimnames = list(trt_names, cycle_names)
+)
+cycle_e <- array(
+  dim=c(n_trt, n_cycle),
+  dimnames = list(trt_names, cycle_names)
+)
+#create empty objects to contain treatment specific costs and QALYs computed across states and cycles
+total_c <- array(
+  dim=c(n_trt),
+  dimnames = list(trt_names)
+)
+total_e <- array(
+  dim=c(n_trt),
+  dimnames = list(trt_names)
+)
+
+#fill-in the above objects with cost and QALY values generated using the Markov trace of the model
+for(i_trt in 1:n_trt){#repeat computation for each trt
+  #costs depend on trt as they depend on risk of recurrence which differs by trt
+  cycle_c[i_trt,] <- Mtrace_homo[i_trt, , ] %*% state_c[i_trt, ]
+  #QALYs do not depend on trt 
+  cycle_e[i_trt,] <- Mtrace_homo[i_trt, , ] %*% state_e[]
+  
+  #combine cycle and trt outcomes to obtain total outcomes using discount factor
+  total_c[i_trt] <- trt_cost[i_trt] + cycle_c[i_trt, ] %*% disc_c_seq
+  total_e[i_trt] <- trt_qaly[i_trt] + cycle_e[i_trt, ] %*% disc_e_seq
+}
+
+#compute NMB
+#assume k value of 10000
+v_nmb <- 10000*total_e - total_c
+#create data frame with results
+df_res_ce <- data.frame("Costs"=round(total_c),
+                        "QALYs"=round(total_e,3),
+                        "NMB"=round(v_nmb))
+
+#show results
+df_res_ce
+```
+
+We can then calculate incremental outcomes for both A and AB treatments compared to the no treatment option, and use these to get the respective ICER values.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#compute incremental outcomes for A or AB vs None
+none_index <- which(names(total_c) == "None")
+delta_c <- total_c[-none_index] - total_c["None"]
+delta_e <- total_e[-none_index] - total_e["None"]
+
+#compute icer for each comparison
+icer <- delta_c/delta_e
+
+#compute incremental NMB for each comparison (assume k=10000)
+inmb <- 10000*delta_e - delta_c
+
+#combine CE results
+res_ce <- data.frame(
+  "Costs"=round(total_c),
+  "QALYs"=round(total_e, 3),
+  "Delta_c"=c(NA,round(delta_c)),
+  "Delta_e"=c(NA,round(delta_e, 3)),
+  "ICER"=c(NA,round(icer)),
+  "NMB"=round(v_nmb),
+  "INMB"=c(NA,round(inmb))
+)
+
+#print results
+res_ce
+```
+
+## Time-inhomogeneous Markov model
+
+In homogeneous Markov models, transition probabilities are constant over time. However, it is also possible to change the model structure to allow probabilities to be time-dependent, thus leading to a *time-inhomogeneous* model. In our application, we can for example consider the following time-dependency assumptions for transition probabilities:
+
+  - Recurrence probabilities depend on time since treatment initiation 
+  - All-cause death probabilities depend on age
+  - Cancer-death probabilities depend on time since recurrence
+
+Given the cohort model structure, time can be recorded in terms of "time-in-model" (eg treatment initiation or age) but not in terms of "time-in-state" (eg time since recurrence). This means that, currently, we can only allow the first two types of probabilities to depend on time. To achieve this, we need to create time-inhomogeneous transition matrices, where probabilities between states need to be defined for each treatment and cycle.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#create zero-filled transition matrices 
+trans_matrices <- array(0,
+  #array of dimensions 3 x 50 x 4 x 4                      
+  dim = c(n_trt, n_cycle, n_state, n_state),
+  #assign name to each dimension
+  dimnames = list(trt_names, cycle_names, state_names, state_names)
+)
+```
+
+In order to allow these probabilities to very across cycles, rather then filling in a different value for each cycle based on some deterministic assumptions, it is generally more useful and practical to assume a time-dependency function which describes how these probabilities change over time in a probabilistic way. As long as the assumed function describes the time-trend of the probabilities in a plausible way, then the task of filling in cycle-specific probabilities for each transition can be considerably simplified and better justified.
+
+For example, estimation of the time-dependency for transition probabilities involving a death state is typically obtained through survival analysis methods, where alternative survival (often parametric) functions are used to represent the relationship between mortality and time [@jackson2017extrapolating]. Usually, a series of alternative models are fitted to the available or literature data (eg life tables) and their fit compared based on standard measures of model fit, such as the *Akaike Information Criterion* (AIC). The model with the best fit to the data is then selected as the winner and its cumulative hazard function is selected to represent the behaviour of mortality over time in the model. As an example, assume that from the literature we know that a Gompertz distribution provides the best fitting function to describe the time-dependency for the all-cause death transitions in the model target population. We can then extract from the literature (or estimate ourselves if data are available) the values of the parameters indexing this distribution (shape and rate) and use these to generate the values of the all-cause death transitions at each cycle in the model. 
+
+In a similar fashion, we may estimate time-dependent transition probabilities between non-death states using some (parametric) function based on some probabilistic model. As an example, the log-logistic mixture cure model can be used to estimate transition probabilities between the Recurrence-free and Recurrence states over time [@jensen2022fitting]. Once estimates for the parameters of this model are obtained, these can be used in the Markov model to estimate probabilities of not being cured and of recurrence at each cycle, and use them to obtain the probabilities of moving from the Recurrence-free to the Recurrence state. 
+
+Finally, we fill-in values for the transition probabilities between Recurrence and death due to cancer, which are assumed to be time independent since the cohort Markov model does not allow to account for time-dependency in terms of time spent in a state. In our case, we use constant rates from an exponential distribution , which can be estimated, for example, from the log rates and rate ratios for the treatments. Again, once all transition probabilities from each state are filled-in, it is important to ensure that they must sum up to one. The following code shows how this can be done in `R`.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#assume to use a Gompertz distribution to describe all-cause mortality time-dependency, with an estimated shape value parameter of 0.0885 and rate value parameter of 0.0081 (assumed constant across treatments)
+shape_death_all <- 0.0885
+rate_death_all <- 0.0081
+
+#define transition probabilities for all-cause death at first cycle using Gompertz cumulative hazard function and express death probability as 1 - survival
+trans_matrices[, 1, "Recurrence-free", "Dead(all cause)"] <- 1 - exp(-Hgompertz(1, shape_death_all, rate = rate_death_all))
+trans_matrices[, 1, "Recurrence", "Dead(all cause)"] <- 1 - exp(-Hgompertz(1, shape_death_all, rate = rate_death_all))
+
+#do the same at successive cycles by looping over them (time incorporated into function as number of cycle will affect the survival probability estimate through the Gompertz function)
+for(i_cycle in 2:n_cycle){
+#ratio of cumulative Gompertz functions gives conditional death prob up to cycle i given death at cycle i-1 (expressed as 1 - survival)
+  trans_matrices[, i_cycle, "Recurrence-free", "Dead(all cause)"] <- 1 - exp(-Hgompertz(i_cycle, shape_death_all, rate = rate_death_all)) / exp(-Hgompertz(i_cycle-1, shape_death_all, rate = rate_death_all))
+  #assume same mortality pattern for Recurrence-free and Recurrence states
+  trans_matrices[, i_cycle, "Recurrence", "Dead(all cause)"] <- 1 - exp(-Hgompertz(i_cycle, shape_death_all, rate = rate_death_all)) / exp(-Hgompertz(i_cycle-1, shape_death_all, rate = rate_death_all))
+}
+
+#use log-logistic mixture cure model to describe transition probability time-dependency between Recurrence-free and Recurrence states, by fixing the estimated parameters of the model separately for each treatment: log-odds of cure, shape and scale parameters
+recurr_mean <- list() #empty list to contain mean parameters from model
+#fill in trt specific model parameter values
+recurr_mean[["None"]] <- c(-0.4398, 0.4597, 0.1379) #log-odds, shape, scale
+recurr_mean[["A"]] <- c(-0.3661, 0.5414, 0.1007) #log-odds, shape, scale
+recurr_mean[["AB"]] <- c(0.2965, 0.5154, 0.2704) #log-odds, shape, scale
+
+#fill in prob values by looping over treatments
+for(tname in trt_names){
+  #name entries in the above-created list
+  names(recurr_mean[[tname]]) <- c("lodds","shape","scale")
+  #fill in prob between Recurrence-free and Recurrence at cycle 1 as product of prob of not being cured (expressed as 1 - prob of being cured) * prob of recurrence (expressed as 1 - prob of no recurrence) based on cumulative hazard function of log-logistic model
+  trans_matrices[tname, 1, "Recurrence-free", "Recurrence"] <- (1 - invlogit(recurr_mean[[tname]]["lodds"])) * 
+    (1 - exp(-Hllogis(1, shape = exp(recurr_mean[[tname]]["shape"]), scale = exp(recurr_mean[[tname]]["scale"]))))
+
+#do the same at successive cycles 
+  for(i_cycle in 2:n_cycle){
+    #assume same prob of not being cured
+  trans_matrices[tname, i_cycle, "Recurrence-free", "Recurrence"] <- (1 - invlogit(recurr_mean[[tname]]["lodds"])) * 
+  #obtain recurrence prob at cycle i conditional on no recurrence at cycle i-1 
+    (1 - exp(-Hllogis(i_cycle, shape = exp(recurr_mean[[tname]]["shape"]), scale = exp(recurr_mean[[tname]]["scale"]))) / 
+       exp(-Hllogis(i_cycle - 1,  shape = exp(recurr_mean[[tname]]["shape"]), scale = exp(recurr_mean[[tname]]["scale"]))))
+  }
+}
+
+#fix estimate from log rate and rate ratios for treatments
+lrate_cdeath_none <- -0.5734 #log rate of mortality for None
+lrate_cdeath_A <- 0.0548 #log rate ratio of mortality for A and AB
+lrate_cdeath_AB <- 0.0548 #log rate ratio of mortality for A and AB
+
+#compute transition probabilities for each treatment between Recurrence and Dead(cancer) by converting log estimates on rate scale to generate treatment-specific but time constant mortality rates (expressed as 1-survival rates)
+trans_matrices["None", , "Recurrence", "Dead(cancer)"] <- 1 - exp(-exp(lrate_cdeath_none))
+trans_matrices["A", , "Recurrence", "Dead(cancer)"] <- 1 - exp(-exp(lrate_cdeath_none + lrate_cdeath_A))
+trans_matrices["AB", , "Recurrence", "Dead(cancer)"] <- 1 - exp(-exp(lrate_cdeath_none + lrate_cdeath_AB))
+
+#make sure rows sum up to 1, ie compute prob of remaining in current state at each cycle as 1 - prob of leaving state (expressed as sum of all other transition prob from that state at each cycle)
+for(i_state in 1:length(state_names)){
+  trans_matrices[, , i_state, i_state] <- 1 - 
+    #sum up probs from each to state to any other state across treatment dimension (index=1) and cycle dimension (index=2) ignoring possible NAs (na.rm=TRUE)
+    apply(trans_matrices[, , i_state, -i_state], c(1,2), sum, na.rm = TRUE) 
+}
+
+#run following code to check that all rows sum up to 1 (ie tranition prob from each state to any other state at a given cycle for each treatment)
+#apply(trans_matrices, c(1,2), rowSums)
+```
+
+Once the time-dependent transition matrix is generated with all its entries, we can calculate the Markov trace of the model in a similar way to what done before for the time-homogeneous model. The main difference is that now a cycle index is also needed when accessing the entries from the transition matrix to generate the proportions of individuals from the cohort in each state at each cycle in each treatment.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#create zero-filled markov trace array object
+Mtrace_inhomo <- array(
+  #dimensions of 3 x 50 x 4
+  0, dim = c(n_trt, n_cycle, n_state),
+  #assign names to each dimension
+  dimnames = list(trt_names, cycle_names, state_names)
+)
+
+#set that everyone starts in Recurrence-free at cycle 1 (100% proportions)
+Mtrace_inhomo[, 1, "Recurrence-free"] <- 1
+
+#extract transition probs to fill-in values of trace at each cycle for each treatment
+for(i_cycle in 1:(n_cycle-1)){
+  for(i_trt in 1:n_trt){
+    #loop over cycles and trt and update proportions in each state from trace using probs between each state (matrix product between trace and trans matrix)
+    Mtrace_inhomo[i_trt, i_cycle + 1, ] <- Mtrace_inhomo[i_trt, i_cycle, ] %*%  trans_matrices[i_trt, i_cycle, ,]
+  }
+}
+
+#check first few rows of trace for None treatment
+head(Mtrace_inhomo["None", ,])
+```
+
+With respect to the results from the time homogeneous version of the model, the state costs for Recurrence-free in the inhomogeneous version are also time-dependent, given that they are defined as a function of the underlying time-dependent probability of recurrence. In contrast, since utilities are fixed over time, these are assumed constant in a similar way to what assumed for the previous model version. In general, much of the code used to compute the model outcomes and CE results for the homogeneous version remains the same here.   
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#create zero-filled array objects to contain state cost values
+state_c <- array(0,
+    dim = c(n_trt, n_cycle, n_state), #dimensions 3 x 50 x 4
+    dimnames = list(trt_names, cycle_names, state_names))
+
+#fill in recurrence costs at each cycle for each treatment using transition matrix probs * assigned costs of recurrence (expressed as unit cost times prob of moving from recurrence-free to recurrence and setting cost of recurrence state to 0) 
+state_c[, , "Recurrence-free"] <- trans_matrices[, , "Recurrence-free", "Recurrence"] * 40000
+state_c[, , "Recurrence"] <- 0
+#set all other death state costs at 0
+state_c[, , "Dead(all cause)"] <- 0
+state_c[, , "Dead(cancer)"] <- 0
+
+#create empty objects to contain memory costs and QALYs for each trt in each cycle across states
+cycle_c <- array(dim = c(n_trt, n_cycle),
+                 dimnames = list(trt_names, cycle_names))
+cycle_e <- array(dim = c(n_trt, n_cycle),
+                 dimnames = list(trt_names, cycle_names))
+
+#create empty objects to contain total costs and QALYs for each trt across cycles and states
+total_c <- array(dim = c(n_trt),
+                 dimnames = list(trt_names))
+total_e <- array(dim = c(n_trt),
+                 dimnames = list(trt_names))
+
+#compute and fill-in the values for the cycle outcomes for each treatment as product between the Markov trace and state outcomes at each cycle 
+for(i_trt in 1:n_trt){
+  #for costs need to take sum of values across states since outer product between matrices will return cycle-specific values for each state due to dependency of state costs on cycle
+  cycle_c[i_trt, ] <- rowSums(Mtrace_inhomo[i_trt, , ] * state_c[i_trt, , ])
+  #for QALYs the matrix (inner) product directly gives the values across states since no dependency on cycles is assumed for this outcome
+  cycle_e[i_trt, ] <- Mtrace_inhomo[i_trt, , ] %*% state_e[]
+  
+#sum over outcomes for each treatment at different cycles to get total outcomes and apply discount factors (for costs also add initial trt costs to each group)
+total_c[i_trt] <- trt_cost[i_trt] + cycle_c[i_trt, ] %*% disc_c_seq
+total_e[i_trt] <- cycle_e[i_trt, ] %*% disc_e_seq
+}
+```
+
+We can then check based on the quantities $\Delta_e$ and $\Delta_c$ the incremental mean cost and benefit values between each of the two treatments and the "no treatment" option, used as comparator. Similarly, we can then compute the respective ICER values for each comparison.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#incremental cost results
+delta_c <- total_c[-none_index] - total_c["None"]
+
+#incremental QALY results
+delta_e <- total_e[-none_index] - total_e["None"]
+
+#icer for each comparison
+icer <- delta_c/delta_e
+
+#nmb for each comparison assuming reference threshold value k=10000
+v_nmb <- 10000*total_e - total_c
+
+#inmb for a k value of 10000
+inmb <- 10000*delta_e - delta_c
+
+#combine CE results
+res_ce <- data.frame(
+  "Costs"=round(total_c),
+  "QALYs"=round(total_e, 3),
+  "Delta_c"=c(NA,round(delta_c)),
+  "Delta_e"=c(NA,round(delta_e, 3)),
+  "ICER"=c(NA,round(icer)),
+  "NMB"=round(v_nmb),
+  "INMB"=c(NA,round(inmb))
+)
+
+#print results
+res_ce
+```
+
+## Implementing the model for PSA
+
+Until now we assumed the model parameters to be fixed, eg transition probabilities at a given time or state outcomes, but in HTA it is essential that uncertainty surrounding these parameters is appropriately quantified and its impact on the single point value model and CE results assessed through PSA. Thus, we will show how to adapt the Markov model to incorporate probabilistic modelling of the parameters to account for the related uncertainty, which is a compulsory requirement when reporting the results from these models under many HTA jurisdictions[@national2022nice;@nederland2024guideline]. 
+
+When running probabilistic analyses, it is important that the number of samples generated is sufficiently large to ensure proper quantification of the uncertainty around model parameters. Here we set the number of iterations to $S=200$ for demonstrative purposes but it is important that the number is set to a value sufficiently large to ensure that model results are not changed by simply slightly increasing this number. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+S <- 200 #set number of iterations
+set.seed(4567) #set rng for reproducibility
+```
+
+A first change that we need to apply to the model code from the deterministic scenario is to modify the array of the transition matrices to include an extra dimension for the newly generated $S$ parameter samples (instead of one). A key element in probabilistic analysis is to choose an appropriate distribution for each parameter or set of parameters and to specify the parameter values of these assumed distributions. As an example, Beta distributions (defined on the interval $(0,1)$) is often advocated as reasonable for probabilities, and its canonical parameters (two different shape parameters) should be defined so that the generated samples of values follow expected behaviours informed from the literature or expert opinion. In a similar way, Gamma and LogNormal distributions are often advocated to generate samples of costs, Normal and Gamma distributions for utilities, LogNormal distributions for relative risks, and Logistic distributions for odds ratios.
+
+In addition, the correlation between different (sets of) parameters may also be important to take into account, depending on the specific clinical context under consideration. When each parameter is sampled from a separate distribution, an implicit *independence assumption* between parameters is made which might not always be reasonable. The possibility to sample parameter values in a *joint* way would allow to take into account the possible association between them, but would require to also specify a plausible correlation/covariance parameter to be able to capture this dependence in a realistic way. In our example, the probability of recurrence was estimated using the log-logistic cure model, where the log-odds, shape and scale parameter values are likely to be correlated with each other. In our probabilistic analysis we may try to generate samples from this model using a multivariate Normal distribution to account for the association among them (under an independence assumption across treatments). In this way we can jointly sample  these parameter values by specifying a mean vector and covariance matrices linking together their distributions.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#empty array to contain a transition matrix for each trt, cycle and iteration
+#dimensions 3 x 50 x 200 x 4 x 4
+trans_matrices_psa <- array(dim = c(n_trt, n_cycle, S, n_state, n_state),
+#set names of dimensions (no name for iterations)
+    dimnames = list(trt_names, cycle_names, NULL, state_names, state_names))
+
+#recurrence prob assumed to come from log-logistic cure model separately for each trt according to values for log-odds, shape and scale parameters
+#set empty lists to contain values for mean, covariance and sample values for these parameters when sampled jointly
+recurr_mean <- recurr_cov <- recurr_sample <- list()
+#fill in means for each trt using values from single point version of model
+recurr_mean[["None"]] <- c(-0.4398, 0.4597, 0.1379) #log-odds, shape, scale
+recurr_mean[["A"]] <- c(-0.3661, 0.5414, 0.1007) #log-odds, shape, scale
+recurr_mean[["AB"]] <- c(0.2965, 0.5154, 0.2704) #log-odds, shape, scale
+#fill in covariances among parameters for each trt (need to get these values from literature/experts or some reasonable guess)
+#since three parameters are jointly modelled then we need 3*(3-1) = 6 values for their covariance matrix (Var(logodds), Var(shape), Var(scale), Cov(logodds,shape), Cov(logodds,scale), Cov(shape,scale))
+recurr_cov[["None"]] <- matrix(c(0.0185, 0.0035, -0.0037,
+                                 0.0035, 0.0063, -0.0026,
+                                 -0.0037, -0.0026, 0.0089),
+                               nrow = 3, ncol = 3)
+recurr_cov[["A"]] <- matrix(c(0.0165, 0.0025, -0.0021,
+                                 0.0025, 0.0061, -0.0018,
+                                 -0.0021, -0.0018, 0.0071),
+                               nrow = 3, ncol = 3)
+recurr_cov[["AB"]] <- matrix(c(0.0172, 0.0037, -0.0034,
+                                 0.0037, 0.0097, -0.0036,
+                                 -0.0034, -0.0036, 0.0114),
+                               nrow = 3, ncol = 3)
+
+#loop through treaments when sampling these parameter values and store them in empty list
+for(tname in trt_names){#sample S parameter values from multivariate normals
+  recurr_sample[[tname]] <- mvrnorm(S, 
+   mu = recurr_mean[[tname]], Sigma = recurr_cov[[tname]])
+
+#assign list containing the sampled values with names   
+  names(recurr_mean[[tname]]) <- c("lodds","shape","scale")
+  colnames(recurr_cov[[tname]]) <- c("lodds","shape","scale")
+  rownames(recurr_cov[[tname]]) <- c("lodds","shape","scale")
+  colnames(recurr_sample[[tname]]) <- c("lodds","shape","scale")
+
+#fill-in transition matrices with sampled values and use Log-Logistic hazard function to generate, at each sampled parameter value, the probability values at first cycle for each trt between Recurrence-free and Recurrence in the model   
+    trans_matrices_psa[tname, 1, , "Recurrence-free", "Recurrence"] <- (1 - invlogit(recurr_sample[[tname]][,"lodds"])) * 
+      (1 - exp(-Hllogis(1, shape = exp(recurr_sample[[tname]][,"shape"]), scale = exp(recurr_sample[[tname]][,"scale"]))))
+#do the same at each successive cycle by computing conditional prob of recurrence at cycle i given no recurrence at i-1    
+    for(i_cycle in 2:n_cycle){
+      trans_matrices_psa[tname, i_cycle, , "Recurrence-free", "Recurrence"] <- (1 - invlogit(recurr_sample[[tname]][,"lodds"])) * 
+        (1 - exp(-Hllogis(i_cycle, shape = exp(recurr_sample[[tname]][,"shape"]), scale = exp(recurr_sample[[tname]][,"scale"]))) / 
+           exp(-Hllogis(i_cycle - 1, shape = exp(recurr_sample[[tname]][,"shape"]), scale = exp(recurr_sample[[tname]][,"scale"]))))
+    }
+}
+```
+
+From the single point value version of the model, we know that the transition probabilities involving all-cause mortality were obtained from the fit of a Gompertz distribution. In theory, we could replicate the same procedure adopted for the Recurrence probabilities and jointly sample the parameters indexing a Gompertz distribution and then use these values to generated corresponding values for the all-cause mortality transitions. To ease presentation of the model, under the assumption that point estimates for the Gompertz parameters are accurate with respect to the true population parameters of interest, we will not generate samples for these transition probabilities as use the same model specification as in the single point value version.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#probabilities of death due to all cause generated using Gompertz hazard function and expressed as 1 - prob of surviving (still time-dependent)
+#start at first cycle
+trans_matrices_psa[, 1, , "Recurrence-free", "Dead(all cause)"] <- trans_matrices_psa[, 1, , "Recurrence", "Dead(all cause)"] <- 1 - exp(-Hgompertz(1, shape = 0.0885, rate = 0.0081))
+#the compute conditional prob of death at cycle i given survival at i-1 (expressed as 1 -corresponding survival prob)
+for(i_cycle in 2:n_cycle){
+  trans_matrices_psa[, i_cycle, , "Recurrence-free", "Dead(all cause)"] <- trans_matrices_psa[, i_cycle, , "Recurrence", "Dead(all cause)"] <- 1 - exp(-Hgompertz(i_cycle, shape = 0.0885, rate = 0.0081)) / 
+    exp(-Hgompertz(i_cycle - 1, shape = 0.0885, rate = 0.0081))
+}
+#singe single point estimate use for parameters, then same transition probs used at each of the S samples
+```
+
+With regard to cancer-related death, in the single point value version of the model, an exponential distribution was assumed for the corresponding rates based on estimates of the log rate for the None treatment and log rate ratios for the other two treatments. To account for the possible association among these parameters, in the probabilistic version we sample them jointly from a multivariate Normal distribution before converting them on the rate scale.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#put point values for parameters in a mean vector
+crr_lmean <- c(lrate_cdeath_none, lrate_cdeath_A, lrate_cdeath_AB)
+#create covariance matrix expressing association among these parameters (need to get these values from literature/experts or some reasonable guess)
+#since three parameters are jointly modelled then we need 3*(3-1) = 6 values for their covariance matrix (Var(lrateNone), Var(lrrA), Var(lrrAB), Cov(lrateNone,lrrA), Cov(lrateNone,lrrAB), Cov(lrrA,lrrAB))
+crr_lcov <- matrix(c(0.0065, -0.0065, -0.0065,
+                     -0.0065, 0.0131, 0.0065,
+                     -0.0065, 0.0065, 0.0157), 
+                   nrow = 3, ncol = 3)
+#sample S parameter values using multivariate normal
+crr_lsample <- mvrnorm(S, mu = crr_lmean, Sigma = crr_lcov)
+
+#give names to list elements
+names(crr_lmean) <- c("lrate None", "lrr A", "lrr AB")
+colnames(crr_lcov) <- c("lrate None", "lrr A", "lrr AB")
+rownames(crr_lcov) <- c("lrate None", "lrr A", "lrr AB")
+colnames(crr_lsample) <- c("lrate None", "lrr A", "lrr AB")
+
+#use sampled values to generate transition prob to death-cancer state using exponential distribution on the rate scale (time-independent but varies across samples)
+#fill in values in lists for each treatment
+trans_matrices_psa["None", , , "Recurrence", "Dead(cancer)"] <- rep(exp(-exp(crr_lsample[, "lrate None"])), each = n_cycle)
+trans_matrices_psa["A", , , "Recurrence", "Dead(cancer)"] <- rep(exp(-exp(crr_lsample[, "lrr A"])), each = n_cycle)
+trans_matrices_psa["AB", , , "Recurrence", "Dead(cancer)"] <- rep(exp(-exp(crr_lsample[, "lrr AB"])), each = n_cycle)
+
+#assume that cancer-related mortality is zero if in the Recurrence-free state for all treatments, cycles and samples
+trans_matrices_psa[, , , "Recurrence-free", "Dead(cancer)"] <- 0
+```
+
+A possible risk in assuming that transition probabilities are independent is that their sum from a given state (for given treatment, cycle and sample) may not be equal to one. This also happens in our example for the two causes of death, with older individuals having higher all-cause mortality with the sum of cancer mortality exceeding one for some of the $S$ samples. The following code shows how this issue can be addressed using a crude approach and scaling the probabilities to ensure that they never exceed one for any sample. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#ensure sum of probs of types of death never exceed one
+#add death prob together with respect to treatments, cycles, and samples
+sum_death_p <- apply(trans_matrices_psa[, , , "Recurrence", c("Dead(all cause)", "Dead(cancer)")], c(1,2,3), sum)
+
+#do not apply scale factor if sums < 1
+sum_death_p[sum_death_p<=1] <- 1
+#apply scale factors for each type of death (at each cycle, sample and trt) with respect to the sum total
+trans_matrices_psa[, , ,"Recurrence", "Dead(all cause)"] <- trans_matrices_psa[, , ,"Recurrence", "Dead(all cause)"] / sum_death_p
+trans_matrices_psa[, , ,"Recurrence", "Dead(cancer)"] <- trans_matrices_psa[, , ,"Recurrence", "Dead(all cause)"] / sum_death_p
+
+#specify remaining transition probs under assumption of no recovery from recurrence at any cycle, trt and sample
+trans_matrices_psa[, , , "Recurrence", "Recurrence-free"] <- 0
+#no transition out of death states
+trans_matrices_psa[, , , "Dead(all cause)", ] <- 0
+trans_matrices_psa[, , , "Dead(cancer)", ] <- 0
+trans_matrices_psa[, , , "Dead(all cause)", "Dead(all cause)"] <- 1
+trans_matrices_psa[, , , "Dead(cancer)", "Dead(cancer)"] <- 1
+
+#to avoid instability when probs estimated very close to 0, set them to 0
+trans_matrices_psa[trans_matrices_psa < 0] = 0
+
+#ensure probs from a state sum up to 1
+for(i_state in 1:length(state_names)){
+  trans_matrices_psa[, , , i_state, i_state] <- 1 - apply(trans_matrices_psa[, , , i_state, -i_state], c(1,2,3), sum, na.rm=TRUE)
+}
+
+#run following code to check that all rows sum up to 1 (ie transition prob from each state to any other state at a given cycle for each treatment and sample)
+#apply(trans_matrices_psa, c(1,2,3), rowSums)
+```
+
+Once the transition matrices are filled in with all sample values, we can now proceed to construct the probabilistic version of the Markov trace of the model in a similar way to what done for the single point value of the inhomogeneous version. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#create zero-filled array to store trace values at each cycle for each trt,  sample and state
+Mtrace_inhomo_psa <- array(0, 
+  dim = c(n_trt, n_cycle, S, n_state),
+  dimnames = list(trt_names, cycle_names, NULL, state_names))
+
+#assume everyone starts in the Recurrence-free state at cycle 1
+Mtrace_inhomo_psa[, 1, , "Recurrence-free"] <- 1 #100% proportions
+
+#fill in trace values 
+for(i_trt in 1:n_trt){ #loop over treatments
+  for(s in 1:S){ #loop over samples
+    for(i_cycle in 2:n_cycle){ #loop over cycles
+      #update trace for each state as matrix product between trace values at previous cycle and transition probs at current cycle 
+      Mtrace_inhomo_psa[i_trt, i_cycle, s, ] <- Mtrace_inhomo_psa[i_trt, i_cycle - 1, s, ] %*% trans_matrices_psa[i_trt, i_cycle, s, , ]
+    }
+  }
+}
+```
+
+Next, we can generate the state costs and QALYs sing again a similar appraoch to the one shown for the single point value version of the model, which needs to be adapted to account for the fact that we have now $S$ different parameter values rather than only one.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#state costs depend on cycle and trt given that recurrence-free costs depend on the time and trt dependent prob of recurrence
+#create zero-filled array for state costs for each trt, cycle, sample and state
+state_c_psa <- array(0, dim = c(n_trt, n_cycle, S, n_state),
+                     dimnames = list(trt_names, cycle_names, NULL, state_names))
+
+#compute cost of recurrence-free state as product between prob of having a recurrence and its related costs (and set costs of recurrence state to zero)
+state_c_psa[, , , "Recurrence-free"] <- trans_matrices_psa[, , , "Recurrence-free", "Recurrence"] * 40000
+state_c_psa[, , , "Recurrence"] <- 0
+#set costs of death states to zero
+state_c_psa[, , , "Dead(all cause)"] <- 0
+state_c_psa[, , , "Dead(cancer)"] <- 0
+
+#do the same for utilities/QALYs but these are not time or trt-dependent
+#create zero-filled array to contain utilities for each sample and state
+state_e_psa <- array(0, dim = c(S, n_state),
+                     dimnames = list(NULL, state_names))
+#generate utility samples using normal distribution with state-specific information retrieved from literature or based on plausible guess
+state_e_psa[, "Recurrence-free"] <- rnorm(S, mean = 0.8, sd = 0.1*0.8)
+state_e_psa[, "Recurrence"] <- rnorm(S, mean = 0.6, sd = 0.1*0.6)
+state_e_psa[, "Dead(all cause)"] <- 0
+state_e_psa[, "Dead(cancer)"] <- 0
+```
+
+We can then calculate treatment costs and QALYs in a similar way to what done before
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#set empty array to contain trt costs and QALYs for each sample
+trt_cost_psa <- trt_qaly_psa <- array(dim = c(n_trt, S),
+                      dimnames = list(trt_names, NULL))
+#generate sample values for toxicity costs, disutility and probs based on information assuming using Normal distributions
+p_tox_A_psa <- rnorm(S, mean = 0.2, sd = 0.1*0.2)
+p_tox_AB_psa <- rnorm(S, mean = 0.4, sd = 0.1*0.4)
+cost_tox_psa <- rnorm(S, mean = 2000, sd = 0.1*2000)
+disu_tox_psa <- rnorm(S, mean = -0.1, sd = 0.1*0.1)
+
+#assign trt costs and QALYs for all samples
+trt_cost_psa["None", ] <- 0
+trt_cost_psa["A", ] <- 5000 + p_tox_A_psa*cost_tox_psa
+trt_cost_psa["AB", ] <- 10000 + p_tox_AB_psa*cost_tox_psa
+trt_qaly_psa["None", ] <- 0
+trt_qaly_psa["A", ] <- p_tox_A_psa*disu_tox_psa
+trt_qaly_psa["AB", ] <- p_tox_AB_psa*disu_tox_psa
+```
+
+Finally, we compute cycle and total outcomes from the probabilistic model 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#set empty array to contain costs and QALYs accrued per cycle (for a given trt and sample) 
+cycle_c_psa <- cycle_e_psa <- array(dim = c(n_trt, n_cycle, S),
+                      dimnames = list(trt_names, cycle_names, NULL))
+#set empty array to contain total costs and QALYs accrued across cycles (for a given trt and sample) 
+total_c_psa <- total_e_psa <- array(dim = c(n_trt, S),
+                      dimnames = list(trt_names, NULL))
+
+#fill in cycle and total outcome values into the arrays by looping over trt and samples
+for(i_trt in 1:n_trt){
+  for(s in 1:S){
+    #cycle costs by summing over costs across states for a given trt and sample
+  cycle_c_psa[i_trt, , s] <- rowSums(Mtrace_inhomo_psa[i_trt, , s, ] * state_c_psa[i_trt, , s, ])
+    #cycle QALYs from matrix x between trace and state QALYs at given sample
+  cycle_e_psa[i_trt, , s] <- Mtrace_inhomo_psa[i_trt, , s, ] %*% state_e_psa[s, ]
+  #compute total costs and QALYs across cycles and applying discount factor
+  total_c_psa[i_trt, s] <- trt_cost_psa[i_trt, s] + cycle_c_psa[i_trt, , s] %*% disc_c_seq
+  total_e_psa[i_trt, s] <- trt_qaly_psa[i_trt, s] + cycle_e_psa[i_trt, , s] %*% disc_e_seq
+  }
+}
+```
+
+We can now assess the economic results as per usual
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#get incremental estimates (for each sample)
+delta_c_psa <- total_c_psa[-none_index,] - total_c_psa[none_index,]
+delta_e_psa <- total_e_psa[-none_index,] - total_e_psa[none_index,]
+ 
+#nmb for each comparison with reference threshold value k=10000 (for each sample)
+v_nmb_psa <- 10000*total_e_psa - total_c_psa
+
+#inmb for a k value of 10000 (for each sample)
+inmb_psa <- 10000*delta_e_psa - delta_c_psa
+
+#combine CE results and show average results across samples
+total_c_psa_avg <- apply(total_c_psa, 1, mean)
+total_e_psa_avg <- apply(total_e_psa, 1, mean)
+delta_c_psa_avg <- apply(delta_c_psa, 1, mean)
+delta_e_psa_avg <- apply(delta_e_psa, 1, mean)
+v_nmb_psa_avg <- apply(v_nmb_psa, 1, mean)
+inmb_psa_avg <- apply(inmb_psa, 1, mean)
+icer_psa <- delta_c_psa_avg/delta_e_psa_avg
+
+res_ce_psa <- data.frame(
+  "Costs"=round(total_c_psa_avg),
+  "QALYs"=round(total_e_psa_avg, 3),
+  "Delta_c"=c(NA,round(delta_c_psa_avg)),
+  "Delta_e"=c(NA,round(delta_e_psa_avg, 3)),
+  "ICER"=c(NA,round(icer_psa)),
+  "NMB"=round(v_nmb_psa_avg),
+  "INMB"=c(NA,round(inmb_psa_avg))
+)
+
+#print results
+res_ce_psa
+```
+
+We can also use the functions from the `BCEA` package to generate standard CEA graphical tools to summarise the CE results.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+#| layout-ncol: 2
+#| label: fig-m1
+
+library(BCEA) #load package
+#generate CE output (also for multiple interventions with ref=assumed comparator)
+ce_markov_bcea <- bcea(eff = t(total_e_psa), cost = t(total_c_psa), ref = 1, interventions = trt_names, Kmax = 100000)
+
+#scatter plot of delta_e and delta_c with assumed value k for wtp
+#points in shaded area  / total points = prob of cost-effectiveness at k
+ceplane.plot(ce_markov_bcea, wtp = 10000)
+
+#prob of cost-effectiveness for a range of wtp values
+ceac.plot(ce_markov_bcea)
+```
+
+## Conclusions
+
+The `R` code provided in this section is related to a $4$-state Markov model but is generalisable to any model structure and parameters. Different survival distributions were used for the transition probabilities, which were incorporated into the model through transformations. These could also be changed to other distributions when needed. We only focus on cohort models in discrete time under a Markov assumption, but the structure can also be extended to handle individual models in continuous time under a semi-Markov assumption. Modelling approaches that allow full individual level simulation, including *Discrete Event Simulations* (DSE), are preferred to cohort models if: events allow to better describe the progression of the disease rather than states; individual outcomes are heterogeneous; or individual disease history has a complex relationship with future disease course. 
+
+Point values for the parameters in the models in practice are often informed from the literature based on estimates retrieved from a trial or based on convention and the context of the analysis. If multiple studies are available, *Network Meta-Analysis* (NMA) may be used to combine evidence from multiple sources to derive the estimate for the parameters.
+
+We have also not considered the topic of *Deterministic Sensitivity Analysis* (DSA), a type of analysis often conducted in HTA for assessing the robustness of the base-case results to deterministic variation of single parameter values. A typical example of DSA would be to re-run the single point value model using a lower and upper value for a given parameter, and then repeat the process for all key parameters in the model. Next, the CE results (eg ICER) associated with each different parameter values would be reported and compared to assess the impact of a single parameter change at a time on the final conclusions. Another type of sensitivity analysis consists not considered here would assess the robustness of the results to *structural* model changes, such as the choice of the distribution to obtain parameter values, number and types of allowed transitions between states or any other type of uncertainty that cannot be parameterised. Discrepancy or constraint approaches may also be used to perform these assessments by changing the input parameter distributions on transition probabilities, costs and utilities[@strong2012managing;@thom2017using]. 
+
+# Network Meta-Analysis {#sec-nma}
+
+## Introduction
+
+Despite the fact that Randomised Controlled Trails (RCTs) are the gold standard for estimating treatment effects, head-to-head RCTs for each treatment comparison of interest may not always be available. When this is the case, **Network Meta-Analysis** (NMA) is the primary method for indirect treatment comparison recommended by many HTA authorities and international organisations[@hoaglin2011conducting;@national2022nice;@nederland2024guideline]. NMA provides a way to indirectly compare treatments that are assessed in separate trials with respect to other treatment options, but for whom there is not direct head-to-head trial evidence. Different NMA approaches have been developed over the years, which will briefly summarised in this section together with their underlying rationale and assumptions.
+
+Suppose interest is in the estimation of a treatment effect on a binary outcome (eg successful prevention of a pain crisis) between two alternative drugs, say treatment A and B, for which no head-to-head comparison evidence is available in the literature. However, the desired treatment effect in terms of *odds ratios* (OR) is available from two trials for the comparison of: treatment A to a third drug, say treatment C ($\text{OR}_{\text{AC}}$); and treatment B and C ($\text{OR}_{\text{BC}}$). We can use direct evidence about the comparison of A vs C and B vs C to indirectly compare A vs B.
+
+An historical approach to perform this indirect comparison, known as the *Bucher method* [@bucher1997results], which calculates the odds ratio for A vs B as:
+
+$$
+\text{OR}_{\text{AB}} = \frac{\text{OR}_{\text{AC}}}{\text{OR}_{\text{BC}}},
+$$
+which, on the log-odds scale, could be linearly represented as $\log(\text{OR}_{\text{AB}})=\log(\text{OR}_{\text{AC}})-\log(\text{OR}_{\text{BC}})$, with associated standard errors (assuming independence) $\text{SE}(\log(\text{OR}_{\text{AB}}))=\sqrt{\text{SE}(\log(\text{OR}_{\text{AC}}))^2+\text{SE}(\log(\text{OR}_{\text{BC}}))^2}$. Now, let's consider the case where a new drug, say treatment D, is only compared to treatment B in a new RCT, but for which there is interest to know how it would compare to treatment A. In this situation, the Bucher method would apply in steps: first derive $\text{OR}_{\text{AB}}$ using the direct evidence from the comparison between A vs C and B vs C; then use this result to obtain $\text{OR}_{\text{AD}}$ from the indirect evidence between A vs B and the direct evidence between B and D.
+
+NMA can be thought of as a generalisation of the Bucher method for combining direct and indirect evidence on multiple treatment comparisons, each possibly coming from one or multiple studies. In addition, it allows to estimate the uncertainty from meta-analysing multiple RCTs and indirect comparisons under the so-called *consistency assumption*, ie that relative treatment effects can be added to correctly estimate another treatment effect of interest. Focus is mainly on binary outcomes $r_{ik}$ for a given treatment $k$ in study $i$, which are usually modelled using a Binomial distribution
+
+$$
+r_{ik}\sim\text{Binomial}(p_{ik},n_{ik}),
+$$
+where $p_{ik}$ and $n_{ik}$ denote the probability of the event and the number of patients on treatment $k$ in study $i$. Since probabilities are bounded between $[0,1]$, the consistency assumption would not hold when applied to their original scale. Thus, we typically apply a link function, such as the *logistic* function, to convert the probability scale to a transformed scaled defined on the real line:
+
+$$
+\text{logit}(p_{ik})=\log \biggl(\frac{p_{ik}}{1-p_{ik}}\biggl),
+$$
+which is the scale of the log odds and log odds ratios. We could then model the transformed probabilities using a linear predictor
+
+$$
+\text{logit}(p_{ik})=\mu_i + \delta_{ibk},
+$$
+where the subscript $b$ denotes the baseline or control arm of the trial, so that $\delta_{ibk}$ is the log odds ratios for treatment $k$ vs $b$ in trial $i$. The main objective of using this specification is to relate study-specific log odds ratios between treatments in study arms to those relative to a common treatment, say treatment 1, often referred to as then *reference treatment*. We can achieve this by assuming either *fixed* or *random* effects across studies[@borenstein2010basic]. The first assumes the relative treatment effects to be the same across studies $\delta_{ibk}=d_{i1k}-d_{i1b}$, where $d_{i1k}$ and $d_{i1b}$ denote the relative treatment effects between treatment 1 and treatments in arm $k$ and $b$ of trial $i$, respectively. The second assumes instead the relative treatment effects to come from a Normal distribution $\delta_{ibk}\sim \text{Normal}(d_{i1k}-d_{i1b},\sigma^2)$, with $\sigma^2$ being the *heterogeneity* variance.
+
+Heterogeneity refers to the extent of variation between studies, often referred in NMA to variation in treatment effects across studies. Choice between assuming fixed or random effects should be guided by an assessment of the extent of heterogeneity, including: similarities of baseline characteristics, outcome definitions, time points, and other study design features. In general, a higher degree of heterogeneity suggests that a random effects assumption may be more appropriate. A quick assessment check consists in comparing the estimated heterogeneity standard deviation $\sigma$ to the estimated log odds ratios to provide an assessment of the heterogeneity relative to the size of the treatments: when $\sigma$ is considerably larger than the log odds ratios, then the impact of heterogeneity is likely to be relevant on estimation.
+
+## Estimation and assessment methods
+
+NMA can be conducted using either Bayesian or frequentist statistical methods [@sadeghirad2023theory]. Under a Bayesian framework any parameters, including the relative treatment effects and heterogeneity variance in NMA, are viewed as random variables with associated probability distributions (eg Normals and Uniforms) called *prior distributions*, which represent the beliefs about the parameter values prior to observing the data. Often, prior distributions are specified as *vague* in the sense that they do not contain any specific external information about what the value of the parameter could be. In contrast, *informative* priors can be specified to incorporate into the model the existence of some clinical opinion on the parameter values. Once specified, prior distributions are combined with the data likelihood through *Bayes' theorem* in the analysis stage to generate a *posterior distribution* for each model parameter. Several `R` packages exist to fit NMA under both a Bayesian or frequentist approach, such as the `multinma` and `netmeta` packages, which will be the focus of this chapter.
+
+There are many tools to assess model fit in NMA under both the Bayesian and frequentist framework. Under a Bayesian setting, the absolute fit of a model to the observed data is often assessed in terms of *residual deviance*, measuring the difference between model predictions and actual observations[@dias2013evidence]. The *Deviance Information Criterion* (DIC) is a Bayesian model assessment measure which assesses the model performance by trading off the fit, based on the deviance, and model complexity, based on an estimate of the effective number of parameters [@spiegelhalter2002bayesian], with lower DIC values being associated with a better performance. 
+
+Under a frequentist setting, a key measure of model diagnostic is obtained from an estimate of the total heterogeneity in the network $\text{Q}_{\text{tot}}$[@higgins2003measuring], which is a generalised version of Cochran's $\text{Q}$ used in conventional pairwise meta-analyses to test the between study heterogeneity. This measure can be used to derive a version of the $I^2$ statistic which is applicable to NMA models[@higgins2003measuring], which is bounded between $[0,100]\%$ with higher values indicating a higher amount of heterogeneity in the model.
+
+In the presence of substantial heterogeneity in treatment effects, *network meta-regression* may be used to attempt to explain this variation based on measured covariates[@dias2013evidence]. Assume we are conducting a pairwise meta-analysis of three trials, where the treatment effect between treatment 1 and 2 is denoted with $d_{12}$ (on the log-odds ratio), and suppose the mean age of patients in trial $i$ is denoted with $x_i$, which varies between trials. If age is a *treatment effect modifier*, ie trial-specific treatment effects are related to age, then the following simple meta-regression model applies
+
+$$
+\delta_{i12}=d_{12}+x_{i}\beta
+$$
+where $\beta$ is a regression coefficient that needs to be estimated. Extending the above framework to NMA for binary outcomes, we can specify a network meta-regression by including into the logistic model for the probability $p_{ik}$ a regression term
+
+$$
+\text{logit}(p_{ik})=\mu_i + \delta_{ibk} + x_{ik}\beta_{ibk},
+$$
+where $x_{ik}$ is the trial and arm-specific value of the covariate, while $\beta_{ibk}$ is the trial-specific interaction term between treatment and covariate, which can be expressed as
+
+$$
+\beta_{ibk} = \beta_{ik} - \beta_{ib},
+$$
+where usually $\beta_{1}=0$ so that only effects relative to control arms are affected. Different assumptions can be specified on the remaining treatment-specific regression coefficients $\beta_z$ for $z\neq 1$, such as assuming exchangeability of the interaction terms across treatments:
+
+$$
+\beta_z \sim \text{Normal}(B,\sigma_{\beta}),
+$$
+or assume a common interaction term across treatments, ie $\beta_2=\ldots,\beta_{ni}=B$.
+
+## Implementation in `R`
+
+In this section we will show some examples on how to conduct a NMA using either a Bayesian or frequentist approach and relying on existing `R` package functions, namely the `multinma` and `netmeta` packages, which were specifically developed for this purpose. We will apply the methods to some example data taken from a published NMA of irrigation and intracavity lavage techniques to prevent surgical site infections or SSIs [@thom2021intra], which are wound infections occurring after an operative procedure. The data are stored in the `R` object `icl_data_long`, whose first few rows look like this
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#load("C:/Users/Andrea/Documents/talks/HSR_2025/appendix/icl_data_long.rda")
+load("~/talks/HSR_2025/appendix/icl_data_long.rda")
+head(icl_data_long)
+```
+
+The data are stored in a long format, where each row represents a different arm for each of the $39$ studies included, and with the reference treatment being nonactibacterial irrigation. In the data set, the variable names denote the study name (`Study`), treatment arm (`trt`), number of SSIs (`r`),  number of patients (`n`), and two binary covariates, namely the contamination status (`contamination_level`) and the surgery type (`surgery_type`).
+
+### Bayesian NMA 
+
+We start by using the package `multinma`, which allows to implement NMAs through the Bayesian software *Stan*[@carpenter2017stan], which is called in the background. After loading the package, we first have a look at the available evidence network represented by the data.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+library(multinma) #load package
+#aggregated data on study arm
+icl_network <- set_agd_arm(icl_data_long, study = study, trt = trt, 
+    r = r, n = n, 
+    trt_class = as.numeric(trt != "nonantibacterial")) #put all non-reference arms into a class
+
+#show network info
+icl_network
+```
+
+The information provided includes: number of studies, type of outcome, number of treatment and classes. The function also tests whether the network is *connected*, ie any treatment can be compared to the reference through either a direct or indirect path of studies. The evidence network can be shown graphically using the `plot`, as shown in @fig-nma1, where nodes represent the treatments, whose size is related to the number of patients, and edges which represent the studies comparing the respective treatments, whose thickness is related to the number of studies on the comparison.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+#| label: fig-nma1
+
+#plot network
+plot(icl_network, 
+     weight_nodes = TRUE, #weight node size by n patients 
+     weight_edges = TRUE) #weight edge thickness by n studies
+```
+
+We can fit fixed or random effects NMAs using the function `nma()` and the argument `trt_effects`. Prior distributions are specified using the arguments `prior_intercept` and `prior_trt`, while for random effects NMAs, priors on heterogeneity standard deviation are specified using the `prior_het` argument.
+
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#fit fixed effects NMA
+icl_nma_fe <- nma(icl_network, trt_effects = "fixed",
+    prior_intercept = normal(scale=100), #normal(mu=0,sigma=100) - for log odds
+    prior_trt = normal(scale = 100)) #normal(mu=0,sigma=100) - for log odds ratios
+
+#fit random effects NMA
+icl_nma_re <- nma(icl_network, trt_effects = "random",
+    prior_intercept = normal(scale=100),
+    prior_trt = normal(scale = 100),
+    prior_het = half_normal(scale = 2.5)) #normal(mu=0,sigma=2.5)[0,] - for heterogeneity sd
+
+#get summary results for FE model
+icl_nma_fe
+
+#get summary results for RE model
+icl_nma_re
+```
+
+In the above outputs, for each parameter, the value of the *effective sample size* (`n_eff`) and the *potential scale reduction factor* (`Rhat`) are provided as standard *Markov Chain Monte Carlo* (MCMC) convergence checks[@brooks2011handbook]. These are related to an estimate of the number of independent MCMC iterations and whether multiple MCMC chains seemed to have converged to the same target distribution, respectively.
+
+Model choice can be informed based on the DIC value, including information on the estimated residual deviance and the effective number of parameters for each model
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#compute fit assessment measures for each model (lower DICs means better fit)
+dic(icl_nma_fe)
+dic(icl_nma_re)
+```
+
+After checking model convergence and fit, we can look at the estimates of the chosen model for the treatment effects. We can, for example, compute relative effects against the reference treatment, here assumed to be nonantibacterial irrigation, using the `relative_effects()` function.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#compute relative trt effects for each arm vs reference on log odds ratio scale
+icl_trt_re <- relative_effects(icl_nma_re, trt_ref = "nonantibacterial")
+#store in array and take exp to get odds ratio
+or_array <- exp(as.array(icl_trt_re))
+#show results
+icl_or_re <- summary(or_array)
+icl_or_re
+```
+
+We can also plot the results using again the `plot` function. In addition, we can also create forest plots using these estimates using the `forestplot()` function from the `forestplot` package, as shown in @fig-nma2. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+#| label: fig-nma2
+
+#convert estimates into data frame object
+icl_or_re_fp <- as.data.frame(icl_or_re)
+#extract information to be plotted in forestplot and display means (2.5% and 97.5%) intervals
+icl_or_re_fp$estci <- sprintf("%.2f (%.2f, %.2f)",
+  icl_or_re_fp$mean, icl_or_re_fp$`2.5%`, icl_or_re_fp$`97.5%`)
+
+library(forestplot) #load package
+#forest plot
+forestplot(icl_or_re_fp, 
+           mean = mean,  #mean value
+           lower = `2.5%`, upper = `97.5%`, #95% interval bounds
+           labeltext = c(parameter, estci), #text for labels
+           boxsize = 0.1, xlog = TRUE) #size of squares and show ticks on x axis on log scale
+```
+
+We can also check how treatments are performing overall, rather than based on pairwise comparisons. We can do this in terms of treatment rankings using the function `posterior_ranks()`, and with the function `posterior_rank_probs()` we can compute the posterior probabilities for each treatment of occupying a given rank. We can also plot the probabilities graphically through a *rankogram*, as shown in @fig-nma3, with the usual function `plot`.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+#| label: fig-nma3
+
+#get mean ranks and summaries for each trt
+icl_rank_re <- posterior_ranks(icl_nma_re)
+icl_rank_re
+
+#get probs of occupying each rank for each trt
+icl_rank_probs_re <- posterior_rank_probs(icl_nma_re)
+icl_rank_re
+
+#show rankogram
+plot(icl_rank_probs_re)
+```
+
+An important covariate in the data set is `contamination_level` (0=clean, 1=contaminated), which may represent a treatment effect modifier. We can attempt to take this into account through a meta-regression by appropriately customising the arguments of the `nma()` function
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#fit RE meta-regression to account for contamination level as trt interaction term
+icl_nma_re_mr <- nma(icl_network, trt_effects = "random",
+    regression = ~.trt:contamination_level, #include interaction term
+    class_interactions = "common", #assume same interaction term for all non-reference groups
+    prior_intercept = normal(scale=100), 
+    prior_trt = normal(scale = 100),
+    prior_het = half_normal(scale = 2.5),
+    prior_reg = normal(scale = 100), #normal(mu=0,sigma=100) - for log odds ratios for interaction
+    chains = 2, iter = 200 #set n chains and iterations
+    )
+#show results
+icl_nma_re_mr
+```
+
+From the above output, we can see that posterior summaries for the regression coefficient suggest no evidence of effect modification, with also a DIC value that is very similar to the one of the random effects model without interaction term, thus suggesting no improvement
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#DIC for meta-regression model
+dic(icl_nma_re_mr)
+```
+
+### Frequentist NMA 
+
+We proceed to show how NMA may be implemented in `R` with the package `netmeta` under a frequentist framework using the same data set. However, in order to use the package, some changes to the current data format are necessary and shown in the following (folded) code part. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: true
+
+#load data structured in matrices for the variables r, n and t (events, petients, trt) with the vector na with number of arms per study  
+#load("C:/Users/Andrea/Documents/talks/HSR_2025/appendix/icl_data.rda")
+load("~/talks/HSR_2025/appendix/icl_data.rda")
+#assign trt names
+t_names <- c("nonantibacterial", "no irrigation", "antiseptic", "antibiotic")
+#merge arms on the same treatment
+for(i_study in 1:icl_data$ns){ #loop over studies
+  study_trt <- unique(icl_data$t[i_study, ]) #trt assessed in each study
+  for(i_trt in 1:study_trt[!is.na(study_trt)]){ #loop over trt
+    arm_index <- icl_data$t[i_study, ] == i_trt #get index of arm for each trt
+    arm_index[is.na(arm_index)] <- FALSE
+    if(sum(arm_index) > 1){
+      #merge to one arm for each trt
+      icl_data$t[i_study, arm_index] <- c(i_trt, rep(NA, sum(arm_index) -1))
+      icl_data$na[i_study] <- icl_data$na[i_study] - sum(arm_index) + 1
+      #r and n are sum of events and patients across all arms
+      icl_data$r[i_study, arm_index] <- c(sum(icl_data$r[i_study, arm_index]), 
+                                          rep(NA, sum(arm_index) -1))
+      icl_data$n[i_study, arm_index] <- c(sum(icl_data$n[i_study, arm_index]), 
+                                          rep(NA, sum(arm_index) -1))
+    }
+  }
+}
+
+#assign strings as trt names
+temp <- matrix("", nrow = dim(icl_data$t)[1], ncol = dim(icl_data$t)[2])
+rownames(temp) <- rownames(icl_data$t)
+for(i_study in 1:dim(temp)[1]){
+  temp[i_study, ] <- t_names[icl_data$t[i_study, ]]
+}
+icl_data$t <- temp
+```
+
+The created list object `icl_data` contains the re-structured SSI data into a format compatible with `netmeta`. For example, we can access information on each variable (eg number of event, patients, etc.) per study from separate elements within the `icl_data` list. As an example, by typing `icl_data$r` the first few rows related to the number of events per study are shown as 
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+head(icl_data$r)
+```
+
+After re-structuring the data set, we can use the function `pairwise()` from `netmeta` to transform the data from arm-based to contrast-based format, automatically calculating odds ratios in each trial with respect to the reference
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+library(netmeta) #load package
+#transform data in contrast-based format (merge info from each list elements)
+icl_network2 <- pairwise(treat = list(t[, 1], t[, 2], t[, 3]), #1=study,2=base trt,3=other trt
+    event = list(r[, 1], r[, 2], r[, 3]), #1=study,2=events for base trt,3=events for other trt
+    n = list(n[, 1], n[, 2], n[, 3]), #1=study,2=patients for base trt,3=patients for other trt
+    data = icl_data, #arm-based data set
+    sm = "OR", studlab = names(na)) #compute OR and get names of studies
+```
+
+The first few rows and columns of the transformed contrast-based data set now appear as
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+head(icl_network2[, 1:5])
+```
+
+We can now proceed to fit a fixed or random effects NMA using the function `netmeta()`, taking as inputs the treatment effects, standard errors, treatment and study labels. We can then print the results of these analyses and use summary statistics to compare them.
+ 
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#fit FE and RE NMA models
+icl_nma_fe2 <- netmeta(TE = TE, seTE = seTE, #trt effect estimates and standard errors
+                       treat1 = treat1, treat2 = treat2, #trt names
+                       studlab = studlab, data = icl_network2, #study names and data set
+                       common = TRUE, random = FALSE, #fit a fixed effects model
+                       reference.group = "nonantibacterial") #choose reference trt
+icl_nma_re2 <- netmeta(TE = TE, seTE = seTE, #trt effect estimates and standard errors
+                       treat1 = treat1, treat2 = treat2, #trt names
+                       studlab = studlab, data = icl_network2, #study names and data set
+                       common = FALSE, random = TRUE, #fit a random effects model
+                       reference.group = "nonantibacterial") #choose reference trt
+
+#print results
+icl_nma_fe2
+icl_nma_re2
+```
+
+A *network diagram* can be generated based on the model results using the function `netgraph()`, as shown in @fig-nma4, while also displaying the number of studies contributing to each contrast 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+#| label: fig-nma4
+
+#plot network diagram
+netgraph(icl_nma_re2, 
+         points = TRUE, cex.points = 2, cex = 1.2, #aesthetics 
+         multiarm = TRUE, number.of.studies = TRUE) #allow for display of multi-arm and n studies 
+```
+
+The probability (called *p-score*) that each treatment is ranked best can be computed using the `netrank()` function, while a rankogram, as shown in @fig-nma5, can be plotted using the `rankogram()` and `plot` functions.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+#| label: fig-nma5
+
+#compute prob for each trt to be the first
+netrank(icl_nma_re2, 
+        small.values = "good") #small trt effects indicate desirable effect
+
+#plot rankogram
+plot(rankogram(icl_nma_re2, small.values = "good"))
+```
+
+Finally, *Surface Under Cumulative Ranking Area* (SUCRA) scores, representing the sum of the area under the cumulative rankograms, can also be estimated, with favoured treatments having a value closer to one.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#estimate SUCRA scores
+netrank(icl_nma_re2, small.values = "good", method = "SUCRA")
+```
+
+## Conclusions
+
+The content of this section focussed on an introduction to the NMA topic and thus only considered an application to binary outcomes but, in general, NMAs can be implemented on many different data types using different distributional assumptions and link functions (see the `multinma` [vignette](https://cran.r-project.org/web/packages/multinma/vignettes/vignette_overview.html) for some examples). For instance, continous outcomes can be modelled using Normal distributions and identity link functions, count data using Binomial distributions with cloglog link functions or ordinal multinomial distributions with probit link functions. Different techniques have also been developed for survival outcomes, including models based on parametric distributions, fractional polynomials, piecewise constant assumptions, and Royston-Parmar splines[@phillippo2024multinma].
+
+Another topic not covered here was that of disconnected networks, in which case the most commonly used methods are some forms of unanchored *Matching Adjusted Indirect Comparison* (MAIC) or *Simulated Treatment Comparison* (STC), which however require individual-level data from at least one study[@phillippo2018methods].
+
+# References

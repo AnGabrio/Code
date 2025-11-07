@@ -1,0 +1,1763 @@
+---
+title: "Statistical methods for model-based HTA"
+subtitle: "Part II"
+description: ""
+author:
+  - name: Andrea Gabrio
+    url: https://angabrio.github.io/agabriosite2/
+    orcid: 0000-0002-7650-4534
+    email: a.gabrio@maastrichtuniversity.nl
+    corresponding: true    
+    affiliation: Maastricht University
+    affiliation-url: https://www.maastrichtuniversity.nl/research/methodology-and-statistics
+date: 2025-11-18
+bibliography: ref_code.bib
+#nocite: |
+#  @gabrio2017handling
+---
+
+This document provides the full code used to simulate some artificial model-based HTA data and implement different types of statistical methods to analyse them. The methods listed here are based on a selection made according to recommendations from the current literature [@el2022scoping] and national guidelines from the *ZorgInstituut Nederland*[@nederland2024guideline] about the statistical analysis of (empirical) trial-based health economic evaluations in the Netherlands. 
+
+The code is presented with some comments and brief descriptions using an HTML interface generated via [*quarto*](https://quarto.org/) and [*Rstudio*](https://posit.co/download/rstudio-desktop/) to ease accessibility. The raw \texttt{R} code is provided in a separate file in the same [GitHub repository](https://github.com/AnGabrio/Code/tree/master/RHTAmethods).
+
+# Continuous Time Multistate Models {#sec-ctmm}
+
+## Introduction
+
+In this section we extend the topics of Markov models, and focus on cohort/individual-level Markov/Semi-Markov multistate models in either discrete or continuous time. We start by introducing continuous-time multistate models, where each individual, at a given time $t$, is assumed to be in one of the $H$ model health states for a certain amount of time, called the *state occupancy*, and denoted with $X(t)$[@jackson2011multi]. Transitions between states are governed by the *hazard rates* or *intensities* $q_{rs}$ for each source state $r$ and destination state $s$, where the quantity $q_{rs}(t)$ represents the instantaneous risk of moving from state $r$ to state $s$ at time $t$:
+
+$$
+q_{rs}(t,z(t))=\lim_{\Delta \rightarrow 0}\frac{\text{Pr}(X(t+\Delta t)=s \mid X(t)=r)}{\Delta t}
+$$
+
+and may depend on $z(t)$, a set of individual-level, possibly time-dependent, covariates. The term $q_{rs}$ represents the rate at which transitions from state $r$ to state $s$ occur in a population in state $r$. Often, these are grouped together into a *transition intensity matrix* $Q$ of dimensions $H\times H$ and formed from the corresponding $q_{rs}$, whose rows sum up to zero, ie diagonal entries are $q_{rr}=-\sum_{s\neq r}q_{rs}$. 
+
+The time variable $t$ determining the transition intensity can either represent: 1) time from the start of the model (*time-in-model*), in which case the model is defined as *clock-forward*; 2) time since the previous transition (*time-in-state*), where $t$ is reset to zero at time of entry to a new state, in which case the model is defined as *clock-reset*. In either case, we assume future disease progression to depend only on time $t$, the state $X(t)$ and predictors $z(t)$. However, in the first case, the model is a *Markov* model since transitions do not depend further on which previous transitions occurred or when they occurred, whereas in the second case the model is a *Semi-Markov* model since it depends on the history of the process only through the time $t$ of entry to the current state. Further, in a *time-homogeneous* model $q_{rs}$ are assumed to be independent of time $t$, with the period spent in state $r$ before transitioning to any other state being exponentially distributed with mean $-\frac{1}{q_{rr}}$. Disease progression is represented through a sequence of $J$ distinct jumps at any times $t_j$ from state $X(t_j)$ to $X(t_j+1)$ given the history $D=(t_0,X(t_0)),\ldots,(t_J,X(t_J))$.
+
+Transition intensities in continuous time are different from transition probabilities in discrete time $p_{rs}$, where the latter describe the probability that a person in state $r$ at the start of the cycle is in state $s$ at the end of a cycle. Instead, in continuous time models, there is no specific cycle length and the transition probabilities $p_{rs}(u)$ over a time period $u$ can be determined as a function of the transition intensities $q_{rs}$[@jackson2011multi]. In general, it is possible to use an individual-level model in continuous time as the basis of a cohort model in discrete time by simply partitioning time into intervals $[0,t_1],\ldots,[t_{C-1},t_C]$, where each of the intervals is a model cycle. Then, within a cohort model, the cohort of individuals would be represented by an $H\times 1$ state vector storing the probability of being in each state for each cycle. If transition intensities $q_{rs}$ are constant over the interval $u=t_{c+1}-t_c$, then the transition probability matrix can be expressed as the matrix exponential of the intensity matrix
+
+$$
+P_c=\text{Exp}(uQ_c),
+$$
+where such matrix is defined by a power series formed from matrix products, as implemented in the `R` package `msm`[@jackson2011multi]. An alternative approach to the matrix exponential is to use the Aalen-Johansen estimator, as in the `R` package `mstate`[@de2011mstate]. 
+
+Before showing an application of an individual-level continuous semi-Markov clock-reset model to a case study, it is important to highlight a few features and assumptions about the model type we will implement. 
+
+First, we will assume that the transition intensities are estimated using continuously-observed data, where the state occupancy $X(t)$ for each individual is known at all times $t$. Note that with two states $1$ and $2$ (eg alive and dead), with transitions from $2$ to $1$ not allowed, a continuous-time model is equivalent to a survival or time-to-event model with hazard function $h(t)=q_{12}(t)$. More generally, the transition rate $q_{rs}(t)$ can be interpreted as the hazard rate for the time until the transition from state $r$ to state $s$. This means, in practice, that fitting multistate models is equivalent of fitting different time-to-event models for each $r\rightarrow s$ transition time. For clock-forward models, this time is counted from the start of the model, while in clock-reset models it is reset to zero at time of entry to state $r$. To fit the transition-specific models, the data need to be re-arranged in a form where rows represent either observed or censored $r\rightarrow s$ transitions. Each observed time of transition from state $r$ to state $s$ should be included as a censored time of transition from state $r$ to any other states that act as competing risks to state $s$, ie states other than $s$ to which that person could transition directly from $r$. Additionally, in clock-forward models, the time of transition to state $s$ should be left-truncated at the time of entry to state $r$. Any survival distribution could be used to describe the intensity functions $q_{rs}(t,z(t))$ and, in our case, we will assume that explanatory variables are time-independent and use the $1\rightarrow 2$ parameter distributions implemented in the `R` package `flexsurv`.
+
+When $X(t)$ is only known at a finite series of times $t=(t_{i1},\ldots,t_{in_i})$, often referred to as *interval-censored* or *panel* data, it is still possible to estimate transition rates to be used in the multistate model. Due to the lack of some data, some assumptions are needed. A typical practice is to assume the intensities to be time-homogeneous and use an exponential distribution for the time-to-event data. These models are fitted by maximum likelihood, where the contribution to the likelihood from a consecutive pair of intermittent observations from one person is given by the transition probability $p_{rs}(u)$ between the corresponding pair of states $r=X(t_{ij}), s=X(t_{ij+1})$ over the time interval $u=t_{ij+1}-t_{ij}$. The full likelihood is obtained by multiplying the likelihood contributions from each interval $j$ and person $i$, and is maximsed using standard maximisation algorithms.
+
+Given the estimates of transition rates, the package we will use for simulating from a multistate model is `hesim`, which allows to efficiently implement Markov models. The specification of survival models for each transition allows `hesim` to simulate transition or jump times between states. These are simulated from the probability density function for time-to-event $t^\star$ for the $r\rightarrow s$ transition $f_{rs}(t^\star\mid\theta(s),t_j)$, where $t^\star \geq 0$ and parameters $\theta=(\theta_1,\ldots,\theta_p)$ may depend on the covariates $z$ through a link function $g(\theta_p)=z^Z\gamma$ with $\gamma$ being a vector of regression coefficients. The time $t^\star$ is the time-in-model if using a clock-forward model and time-in-state when using a clock-reset model. 
+Given a system for simulating jump times, `hesim` uses an algorithm to generate transition times and manage competing risks:
+
+  1. Let $r$ be the state entered at time $t_j$ and let the number of allowed transitions from state $r$ be $n_r$, where if $j=0$ then $t_j=0$.
+  2. Simulate times $T=t_{1,j+1},\ldots,t_{n_{r}j+1}$ to each of the $n_r$ allowed transitions
+  3. Set the time of the transition $t_{j+1}$ equal to the minimum simulated time in $T$ and the next state $s$ to the state with the minimum simulated time.
+  4. Set $r=s$ and $t_j=t_{j+1}$. If the individual is still alive, repeat the previous steps until death.
+
+Given the simulated diease progression $D$, total costs and QALYs are simulated by summing the outcome values accumulated by each state $h$ and time $t$, ie $z_h(t)$[@siebert2012state]. In `hesim` times are partitioned into $M$ intervals over which these values are constant at $z_{hm}$ for each $m$, where $m$ contains times $t$ such that $t_m < t \leq t_{m+1}$. Discounted outcome values for health state $h$ are given by 
+
+$$
+\sum_{m+1}^M\int_{t_m}^{t_{m+1}}z_{hm}e^{-rt}dt=\sum_{m=1}^M z_{hm}\Biggl(\frac{e^{-rt_m}-e^{-rt_{m+1}}}{r}\Biggl),
+$$
+where $r\geq 0$ is the discount rate and, when $r=0$ this simplifies to $\sum_{m=1}^Mz_{hm}(t_{m+1}-t_m)$. In a cohort model, state values generally depend only on time through time-in-model, and it is challenging to implement dependence on time-in-state. By contrast, is it straightforward for individual-level models to allow state values to depend on time-in-state.
+
+## Case study
+
+The colon cancer data previously explored in cohort models is also considered here. The multistate model is formed by $H=4$ health states, so that the $Q$ matrix of transition rates is a $4 \times 4$ matrix, with the four allowed transition rates making up the off-diagonal elements of the matrix: 1) from Recurrence-free to Recurrence; 2) from Recurrence-free to Dead(all cause); 3) from Recurrence to Dead(cancer); 4) from Recurrence to Dead(all cause).
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: true
+
+x <- 1
+```
+
+The model is *irreversible* as individuals cannot return to their previous states. Note that these transitions are different from those allowed over an interval of time. For example, over one year, an individual can transition from Recurrence-free to Dead(cancer), but in a continuous time model we assume this happened via a transition to recurrence at some point in the year. Each state will be associated with an annualised cost and utility value which will be used to estimate total outcome values. We still consider three alternative treatment options (None, A and AB), which are assumed to affect only the transition from Recurrence-free to Recurrence, and are associated with a cost and risk of toxicity, where toxicities have an impact on costs and QALYs. 
+
+Unlike in the cohort Markov model, where transitions between states were represented by probabilities, we will now be fitting survival models to the time-to-event data in the underlying data set. The data are stored in the file called `msm_colon.rda` which can be loaded in the `R` workspace using the `load()` function. The first few rows of the data set would then appear as
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#load("msm_colon.rda")
+load("~/talks/HSR_2025/appendix/msm_colon.rda") #load data into current workspace
+#make intervention variable numeric to use in the model
+msm_colon$strategy_id <- as.numeric(msm_colon$rx)
+#look at first few rows
+head(msm_colon)
+```
+
+We will assign names to the different allowed transitions to ease the interpretation of the code, thus we create an object to contain these names.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#give names to possible trans: Recurrence-free-Recurrence, Recurrence-free-Dead(all cause), Recurrence-Dead(cancer), Recurrence-Dead(all cause)
+trans_name <- c("RF-R","RF-OCD","R-CD","R-OCD")
+```
+
+There are $`r dim(msm_colon)[1]`$ rows which include observed times of transition between states, and censored times of transitions to "competing risks", ie transitions that a person was at risk of but that did not happen. For example, the first person in the data set transitioned from state $1$ (`from`) to state $2$ (`to`) at $2.65$ years (`Tstop`). This transition event implies a censoring time of $2.65$ for the competing transition from state $1$ to state $3$ and $4$ (`Tstart`). 
+
+The variable `id` is the individual identifier while `rx` uses the codes $1$, $2$ and $3$ to denote the treatment option to which each individual is assigned, namely "None", "A" and "AB", respectively. The variables `age` and `sex` are the corresponding demographics, `from` and `to` are the starting and finishing state of each transition, `Tstart` is the time that the individual started in the `from` state, while `Tstop` is the time they exit that state to move to the `to` state. The variable `year` gives the time spent in state `from`, while `status` indicates if the transition was actually observed ($1$) or censored ($0$). For example, a transition from Recurrence-free to Recurrence would be censored if the individual moved to Dead(all cause) before they had a recurrence. The column `trans` specifies the transition number.
+
+## Estimating multistate models with fully-observed data
+
+After structuring the data in the required format, we can fit the time-to-event models to inform our clock-reset $4$-state model. We first load the necessary packages and set a random seed number.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#load required packages
+library(survival)
+library(flexsurv)
+set.seed(23456) #set rng for reproducibility
+```
+
+We choose a set of distributions to explore for each transition, considering only standard parametric models for this application. We will then choose the model with minimum AIC on the observed data for each transition, although the choice should be informed also based on their extrapolation and fit compared to long-term data, when these are available. To implement minimum AIC selection, we build a table to compare the performance of distributions for transitions in our clock-reset model. We use the `flexsurvreg()` and `Surv()` functions to fit these models to the data set. Treatments are only assumed to affect transitions from Recurrence-free to Recurrence, and assume no other covariate effects on transition rates. By default, the `Surv()` function fitted to the `Tstart` and `Tstop` columns would use time since entering the model as the time parameter of the survival models, and thus result in a clock-forward model. We will instead apply `Surv()` to `years` so as to use time spent in the current state as the time variable, and thus obtain a clock-reset model for each transition. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#get distribution names available from flexsurv package
+distr_name <- c("exp", "weibull", "gompertz", "lognormal", "llogis", "gamma")
+
+#matrix to store summaries of the clock-reset distributions
+surv_aic <- matrix(nrow = length(distr_name),
+                   ncol = length(trans_name),
+                   dimnames = list(distr_name, trans_name))
+#list to store survival models to be used in multistate model
+surv_model <- list()
+#list of distributions fit to time-in-state
+surv_formula <- list()
+#set transitions that depend on trt
+surv_formula[["RF-R"]] <- as.formula("Surv(years, status) ~ factor(strategy_id)")
+#set transitions that are independent of trt
+surv_formula[["RF-OCD"]] <- as.formula("Surv(years, status) ~ 1")
+surv_formula[["R-CD"]] <- as.formula("Surv(years, status) ~ 1")
+surv_formula[["R-OCD"]] <- as.formula("Surv(years, status) ~ 1")
+```
+
+We loop over transitions and distributions fitting the models and extracting the AIC.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#fit different surv dist to each transition and extract AIC
+for(i_trans in 1:length(trans_name)){ #loop over transitions 
+  surv_model[[trans_name[[i_trans]]]] <- list() #list to contain model results
+  for(i_dist in 1:length(distr_name)){ #loop over distributions 
+    #fit distribution for each transition
+    surv_model[[i_trans]][[distr_name[[i_dist]]]] <-  
+      flexsurvreg(surv_formula[[i_trans]],  #choose survival formula
+                  subset = (trans == i_trans), #choose transition
+                  data = msm_colon, dist = distr_name[i_dist]) #give data and distr name
+    #extract AIC value per model and transition 
+    surv_aic[i_dist, i_trans] <- 
+      surv_model[[i_trans]][[distr_name[[i_dist]]]]$AIC
+  }
+}
+```
+
+For each transition we now choose the distribution with minimum AIC.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#object to store selected distribution based on minimum AIC
+min_AIC <- matrix(NA, nrow = 2, ncol = length(trans_name))
+rownames(min_AIC) <- c("Distribution", "AIC")
+colnames(min_AIC) <- trans_name
+#extract best distribution for each transition
+min_AIC["Distribution", ] <- distr_name[apply(surv_aic, c(2), which.min)]
+min_AIC["AIC", ] <- round(apply(surv_aic, c(2), min), digits = 2) 
+#show results
+min_AIC
+```
+
+## Estimating multistate models with panel data
+
+We now use the `msm` package to estimate constant transition rates with panel data. We first load the artificial panel version of the colon data (`panel_colon_data.rda`), consisting in a series of observations of the state occupancy for each individual `id` on `strategy_id` at time point `years`. The first few rows of the panel data set look like
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+library(msm) #load package
+#load("panel_colon_data.rda") 
+load("~/talks/HSR_2025/appendix/panel_colon_data.rda") #load data into current workspace
+#look at first few rows
+head(panel_colon)
+```
+
+We use the function `statetable.msm()` to summarise the number of observed transitions between states in successive observations: for example, we observe that there were $383$ transitions from Recurrence-free to Recurrence and $2$ transitions from Recurrence to Dead(all cause). Note that we do not know the times of all transitions in continuous time, as these are only available over some time interval.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#summary of transitions
+statetable.msm(state = state, subject = id, data = panel_colon)
+```
+
+To fit a multistate model to these data, we need to specify the allowed transitions in continuous time. These are stored in a $4\times 4$ matrix which is passed to `msm`, with the entry in row $r$ and column $s$ equal to $1$ if an instantaneous transition in continuous time is allowed from state $r$ to state $s$.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#allowed transitions matrix
+colon_qmatrix <- rbind(
+  c(0, 1, 0, 1), #RF-R, RF-OCD
+  c(0, 0, 1, 1), #R-OCD, R-CD
+  c(0, 0, 0, 0), #OCD-none
+  c(0, 0, 0, 0) #CD-none
+)
+#assign names
+rownames(colon_qmatrix) <- colnames(colon_qmatrix) <- c(
+  "Recurrence-free", "Recurrence", "Dead(cancer)", "Dead(all cause)"
+)
+#estimate transition rates using msm
+#take as inputs the state, time and id variables
+colon_msm_fit <- msm(state ~ years, subject = id, data = panel_colon,
+  #trt only affect RF-R transition as predictor
+  covariates = list("1-2" = ~ strategy_id), 
+  #assume time of entry in OCD and CD but alive before 
+  deathexact = c(3, 4),
+  #matrix of allowed transitions
+  qmatrix = colon_qmatrix,
+  #generate initial values for transition rates
+  gen.inits = TRUE,
+  #do not center predictors
+  center = FALSE)
+
+#show results
+colon_msm_fit
+```
+
+Once the transition rates and covariate effects are estimated, we can convert these to transition probabilities using the `pmatrix.msm` function. For models with covariates, we also need to specify for which covariate categories to estimate the transition probabilities. As an example, here we estimate these for the first treatment
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#convert transition rate into probs for trt=1
+pmatrix.msm(colon_msm_fit, covariates = list(strategy_id = 1))
+```
+
+## Cost-effectiveness modelling in multistate models
+
+We will use the `hesim` package to implement individual-level continuous-time clock-reset multistate models to the colon cancer data, considering fully-observed data for simplicity. We consider *probabilistic analyses*, where uncertainty in the input parameters is propagated to the estimated costs and benefits, which is a compulsory requirement when reporting CE results from model-based analyses for many HTA authorities[@national2022nice;@nederland2024guideline].
+
+We first load the necessary packages, including `data.table`, `flexsurv`, `hesim`, `ggplot2` and `BCEA`, and specify the variables that define the model and analyse the results. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+library(data.table)
+library(flexsurv)
+library(hesim)
+library(ggplot2)
+library(BCEA)
+
+#define variables
+state_names <- c("Recurrence-free", "Recurrence",  
+    "Dead(cancer)", "Dead(all cause)") #names of states
+trt_names <- c("None", "A", "AB") #trt names
+n_patients <- 1000 #n simulated individuals 
+S <- 200 #n samples
+n_state <- 4 #n states
+n_trt <- 3 #n trt
+```
+
+The allowed transitions need to be assigned a unique consecutive number in the `transition_matrix` that links them to the relevant states, with not allowed transitions being assigned an `NA` value. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#build trans matrix
+trans_matrix <- rbind(
+  c(NA, 1, NA, 2), #RF-R, RF-OCD
+  c(NA, NA, 3, 4), #R-OCD, R-CD
+  c(NA, NA, NA, NA), #OCD-none
+  c(NA, NA, NA, NA) #CD-none
+)
+#assign names
+colnames(trans_matrix) <- rownames(trans_matrix) <- state_names
+```
+
+The treatments are also given unique consecutive numbers in the `strategies` data table below, with also the patients to be sampled that will be included in a data table with consecutive numeric `patient_id` and associated baseline characteristics.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#trt to compare
+strategies <- data.table(
+  strategy_id = c(1, 2, 3),
+  strategy_name = trt_names
+)
+
+#individuals are randomly sampled with replacement from the colon data set
+#sample patient id to preserve correlation between age and sex
+patient_id_sample <- sample(1:n_patients, size = n_patients, replace = TRUE) #sample patients with replacement and put sampled data into a data table object
+patients <- data.table(
+  patient_id = 1:n_patients,
+  age = msm_colon$age[patient_id_sample],
+  sex = msm_colon$sex[patient_id_sample]
+)
+
+#need to specify non-death states
+states <- data.table(
+  state_id = c(1:2),
+  state_name = rownames(trans_matrix)[1:2]
+)
+```
+
+The `hesim_data()` function can be used to create lists of treatments, patients, and states for simulation, while `expand()` duplicates patients for each treatment, and the `get_labels()` function allows to create labels for the treatments, subgroups, states and transitions.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#data specification for hesim package
+hesim_data <- hesim_data(
+  strategies = strategies,
+  patients = patients,
+  states = states
+)
+
+#duplicate individuals for each treatment
+trans_model_data <- expand(hesim_data, 
+    by = c("strategies", "patients"))
+
+#generate model labels
+hesim_labels <- get_labels(hesim_data)
+hesim_labels$transition_id <- c(
+  "RF-R" = 1,
+  "RF-OCD" = 2,
+  "R-CD" = 3,
+  "R-OCD" = 4
+)
+#assign numbers to names
+hesim_labels$state_id <- c(1:n_state)
+names(hesim_labels$state_id) <- state_names
+```
+
+The disease simulation is constructed using individual-level continuous-time survival models on each of the transitions using the chosen distributions before by providing the required inputs to the `create_IndivCtstmTrans()` function 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#extract into a list the chosen survival models for each transition
+hesim_surv <- flexsurvreg_list(
+  surv_model[["RF-R"]][["gompertz"]],
+  surv_model[["RF-OCD"]][["gompertz"]],
+  surv_model[["R-CD"]][["llogis"]],
+  surv_model[["R-OCD"]][["exp"]]
+)
+#fit model to transition data
+trans_model <- create_IndivCtstmTrans(
+  object = hesim_surv, #list of surv models
+  input_data = trans_model_data, #transition models
+  trans_mat = trans_matrix, #trans matrix
+  n = S, #n samples
+  clock = "reset", #clock-reset version
+  start_age = patients$age #starting age for each patient
+)
+```
+
+The utility and cost models are specified as unique values for all combinations of treatment, state, individual, sample and time. In the colon cancer case, utilities are a combination of state utility and disutility due to toxicity, both randomly sampled. There are two time period: in the first year individuals have a risk of toxicity and associated disutility, and thereafter they only experience state utility. We need unique values for each state, sample, treatment and for each of the two time periods. The following code is used to create this custom table.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#time periods for utility
+n_u_time <- 2
+
+#sample utilities and probs separately and combine into a utility table, where number of states is the number of states minus number of absorbing states
+u_table <- stateval_tbl(
+  data.table(
+    strategy_id = rep( #values for each trt
+    c(1:n_trt), each = length(states$state_id) * n_u_time * S
+  ),
+  sample = rep( #values for each sample
+    rep(c(1:S), each = length(states$state_id) * n_u_time),
+    times = n_trt #repeated for each trt
+  ),
+  state_id = rep( #values for each state
+    rep(1:length(states$state_id), each = n_u_time),
+    times = n_trt * S #repeated for each trt and sample
+  ),
+  time_start = rep( #values for each time point
+    c(0, 1), 
+    times = n_trt * S * length(states$state_id) #repeated for each trt, sample and state
+  ),
+  value = 1),
+  dist = "custom"
+)
+
+head(u_table)
+```
+
+Uncertainty about state utilities expressed using Normal distributions, as for probabilities and disutilities of toxicity for each treatment.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#Normal distributions to sample utilities for each state
+u_RF <- rnorm(S, mean = 0.8, sd = 0.1*0.8)
+u_R <- rnorm(S, mean = 0.6, sd = 0.1*0.6)
+#Normal distributions to sample probs of toxicity for each trt
+p_tox_A <- rnorm(S, mean = 0.2, sd = 0.1*0.2)
+p_tox_AB <- rnorm(S, mean = 0.4, sd = 0.1*0.4)
+#Normal distributions to sample disutilities 
+disu_tox <- rnorm(S, mean = -0.1, sd = 0.1*0.1)
+```
+
+We can now calculate the combined utilities
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#fill in utility table values for each trt, state and period
+u_table[strategy_id == 1 & state_id == 1, "value"] <- c(
+  u_RF, u_RF
+)
+u_table[strategy_id == 1 & state_id == 2, "value"] <- c(
+  u_R, u_R
+)
+u_table[strategy_id == 2 & state_id == 1, "value"] <- c(
+  u_RF + p_tox_A * disu_tox, u_RF
+)
+u_table[strategy_id == 2 & state_id == 2, "value"] <- c(
+  u_R + p_tox_A * disu_tox, u_R
+)
+u_table[strategy_id == 3 & state_id == 1, "value"] <- c(
+  u_RF + p_tox_AB * disu_tox, u_RF
+)
+u_table[strategy_id == 3 & state_id == 2, "value"] <- c(
+  u_R + p_tox_AB * disu_tox, u_R
+)
+```
+
+The filled-in table values can then be now passed to the function `create_StateVals()` to generate the utility model to be used in the successive economic analysis.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#create utility model
+u_model <- create_StateVals(u_table,
+    hesim_data = hesim_data,
+    n = S)
+```
+
+The cost models are specified in a similar way to the utilities, except that there are now two models. One is for treatment costs and the other is for state costs. In our case, treatment costs are applied once at the start of the model and there is a unique value for each treatment and sample. State costs are assumed zero except for a one-off cost of $40,000$ for advanced treatment in the Reecurrence state.
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#prob of toxicity on each trt
+p_tox_A <- 0.2
+p_tox_AB <- 0.4
+cost_tox <- 2000
+disu_tox <- -0.1
+```
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#trt costs depend on costs of adverse events - one off
+trt_cost_table <- stateval_tbl(
+  data.table(
+    strategy_id = rep(c(1:n_trt), each = S),
+    sample = rep(c(1:S), times = n_trt),
+    value = 1
+  ),
+  dist = "custom"
+)
+
+#state costs 0 except one-off cost of advanced trt
+n_cost_times <- 2 #only for Recurrence state
+state_cost_table <- stateval_tbl(
+  data.table(
+    state_id = rep(states$state_id, each = n_cost_times),
+    time_start = rep(c(0, 1), times = length(states$state_id)),
+    est = c(0, 0, 40000, 0)
+  ),
+  dist = "fixed"
+)
+
+#simulate distributions for toxicity cost and combine it with trt costs and probs of toxicity to get trt costs
+#Normal distributions to sample tox costs
+c_tox <- rnorm(S, mean = 2000, sd = 0.1*2000)
+trt_cost_table[strategy_id == 1, "value"] <- 0
+trt_cost_table[strategy_id == 2, "value"] <- 5000 + p_tox_A + cost_tox
+trt_cost_table[strategy_id == 3, "value"] <- 10000 + p_tox_AB + cost_tox
+```
+
+Next, we pass the two cost tables to the function `create_StateVals()` to create treatment and state cost models.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#trt costs depend on costs of adverse events - one off
+trt_c_model <- create_StateVals(trt_cost_table,
+    hesim_data = hesim_data,
+    n = S)
+state_c_model <- create_StateVals(state_cost_table,
+    hesim_data = hesim_data,
+    n = S)
+#combined costs model
+c_model <- list(Drug = trt_c_model, #drug=trt
+                Medical = state_c_model) #medical=state
+```
+
+Simulation of the disease progression, costs and utilities is done using the function `IndivCtstm$new()` as follows
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#build combined CE model of progression, cost and utility
+HE_model <- IndivCtstm$new(
+  trans_model = trans_model,
+  utility_model = u_model,
+  cost_models = c_model
+) 
+```
+
+Simulation is conducted using the `sim_disease()`, which simulates disease and creates the object `disprog_` in the form of a data table, whose columns store the transitions from a state entered at `time_start` to another state at `time_stop`, for each sample, treatment and patient.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#disease modelling
+HE_model$sim_disease()
+
+#show first few rows from table results
+head(HE_model$disprog_)
+```
+
+After disease progression has been simulated, then also discounted costs and QALYs can be simulated using the dedicated functions `sim_costs()` and `sim_qalys()`
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#costs and QALYs modelling (with discount factor)
+HE_model$sim_costs(dr = 0.03)
+HE_model$sim_qalys(dr = 0.015)
+```
+
+State occupancy probabilities can be calculated using the function `sim_stateprobs()`, taking as input a vector of time points $t$ at which the probabilities should be estimated
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#SOPs for clock-reset model
+HE_model$sim_stateprobs(t = seq(0, 20, 1/12)) #at 241 times
+```
+
+and which are stored in the object `state_probs_`. We can use the function `autoplot()` to plot the state occupancy probabilities estimated before, averaged by treatments, states and times.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#combine SOPs by trt, state and time
+state_probs <- HE_model$stateprobs_[, .(prob_mean = mean(prob)), 
+    by = c("strategy_id", "state_id", "t")]
+#plot SOPs
+autoplot(HE_model$stateprobs_, labels = hesim_labels)
+```
+
+We can finally analyse the CE results using functions from the `BCEA` package. First we need to convert the `hesim` output into a form that is accepated by `BCEA`, namely summarised in terms of average total costs and QALYs per treatment arm across all times and states.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#convert output into BCEA accepted format
+hesim_sum <- HE_model$summarize()
+#create empty matrices of dimensions S x 3 to store total costs and QALYs
+costs_mat <- effects_mat <- matrix(NA, 
+  nrow = S, ncol = n_trt, 
+  dimnames = list(NULL, trt_names))
+
+#loop over trt to aggregate outcome values
+for(i_trt in 1:n_trt){
+  costs_mat[, i_trt] <- with(
+    hesim_sum$costs,
+    costs[category == "total" &
+      strategy_id == i_trt &
+      dr == 0.03]
+  )
+  
+  effects_mat[, i_trt] <- with(
+    hesim_sum$qalys,
+    qalys[strategy_id == i_trt &
+      dr == 0.015]
+  )
+  
+}
+```
+
+Finally, we can use `BCEA` functions to produce standard CE output based on the economic results of the model. First, we use the `bcea()` function to automatically generate all the necessary output and store it in the object `colon_bcea`.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#generate and return BCEA object (set ref=1 for comparator arm)
+colon_bcea <- bcea(eff = effects_mat, cost = costs_mat, ref = 1, 
+                   interventions = trt_names, Kmax = 100000)
+```
+
+Next, we can summarise the CE results using dedicated functions and plots. A general overview of the incremental results in terms of several CEA quantities (eg ICER) can be obtained via the function `summary()`.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#print summary incrmental results assuming ref as comparator
+summary(colon_bcea)
+```
+
+We can also obtain standard CE graphs, such as the CE plane and CEAC using dedicated functions, as shown below.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+#| label: fig-mm1
+
+#scatter plot of delta_e and delta_c with assumed value k for wtp
+#points in shaded area  / total points = prob of cost-effectiveness at k
+ceplane.plot(colon_bcea, wtp = 100000)
+
+#prob of cost-effectiveness for a range of wtp values
+ceac.plot(colon_bcea)
+```
+
+## Conclusions
+
+The code for $4$-state clock-reset and forward models could be adapted to other clinical settings, although the presented strategies only included as baseline variables age and sex which were assumed to not affect the transition rate models. This could be modified to allow to better model individual heterogeneity by including these variables as covariates into the survival models and then passing the results of these models to `hesim`. 
+
+When data from a study are not available, indirect treatment comparison methods using multiple studies might be required, such as NMA. `hesim` can use estimated log hazard ratios from a proportional hazards NMA and the coefficients from non-proportional hazards NMA. Instead of passing `flexsurvref_list` objects to `create_IndivCtstmTrans()` it is possible to instead pass `params_surv_list` or `param_surv` objects for each possible transition, which take as arguments the type of distribution (`dist`) and samples of the coefficients (`coef`).
+
+Partitioned survival models [@woods2017nice] provide alternative approaches to use when *Overall Survival* (OS) and *Progression-Free Survival* (PFS) *Kaplan-Meier* (KM) curves are available, while full individual history can be used through the use of Discrete Event Simulation models.
+
+# Discrete Event Simulation {#sec-des}
+
+## Introduction
+
+*Discrete Event Simulation* (DES) is a form of modelling for the occurrence of discrete events and the leaps in time between them[@karnon2014use]. In contrast to cohort discrete-time state transition models, DESs allow modelling of individual-level trajectories and facilitate the incorporation of detailed clinical data to model complex clinical care pathways. 
+
+In general, DES is the modelling of a system as it changes with time by representing the instantaneous occurrences of events at separate time points, and may be applied either with or without *resource constraints*. Those with constraints might include scarce clinician availability on a hospital ward and typically involve the simulation of patient queuing systems, such as the optimisation of surgical devices and intensive care unit care capacity. Those without constraints might correspond to analyses where the overall resource scarcity is proxied by a CE threshold, and have been applied in areas such as smoking cessation interventions, cancer therapy and treatment for schizophrenia. 
+
+A few key elements can be identified which characterise DES[@karnon2014use]: entities, attributes, events, timing. In particular, DES is an individual-level simulation approach where individual *entities* are modelled, while also simulating the time between a series of *events* for each simulated entity. These events might be sequential or related, and their ordering may be considered stochastic, ie sampled from joint distributions. Events may also be repeating or competing, depending on whether they may re-occur or prevent the occurrence of other events, ie death from one event competes with another event related to a different cause of death. The *timing* of events is often simulated as a stochastic process, while the timing of other processes, such as monthly transfusions, may be deterministic. The simulation of stochastic events is implemented through drawing from probability distributions for the given time-to-event using pseudorandom number generators, while the timing of events may be correlated with other distributions in the model to simulate associations between the probabilities of different events or their consequences in terms of benefits and costs. These distributions may vary between individuals according to *attributes* of simulated entities, which may be known at the outset of the simulation (eg age and sex) or may be determined within the model (eg treatment success of failure).    
+
+As a microsimulation approach, DES allows retaining information on attributes of each entity and aviods problems resulting from memory-less property of cohort state transition models, and is particularly suited for the simulation of time-varying event rates, including those based on non-constant hazard rates[@karnon2014use]. DES allows to naturally record previous health events for simulated individuals, so that rates that vary with prior disease history can be easily implemented, and to incorporate heterogeneous patient populations and their subsequent simulation. DESs do not require assignment of individuals to mutually-exclusive states and they handle time in a continuous way, thus avoiding problems related to discrete-time approximations or multiple events occurring within a single discrete-time interval. However, DESs are typically more time-consuming than conventional cohort-based discrete time approaches. 
+
+In the following, we will use the term "individual" to denote simulated hypothetical individuals, and the term "resource" to denote, for example, operating rooms, medical supplies or healthcare professionals. To ease presentation of DES, we will not consider resources and their use, given that in standard HTA analyses constraints are not included explicitly. While in theory, individuals in DES can interact with each other, in practice few models implement these interactions. When this is considered an important feature for simulating the disease progression (eg infectious diseases), alternative approaches known as *Agent-based models* may be used instead [@hunter2021using]. These allow specification of the behaviour of agents, including individuals, which can drive the interactions and their outcomes, where interactions are assumed to occur at discrete times.
+
+## Implementation in `R`
+
+We illustrate the application of DES models in `R` through a case study on the CE of adjuvant therapy in colorectal cancer based on the `colon` data set available from the `survival` package, whose key characteristics have already been introduced in previous sections[@moertel1990levamisole]. In our application, we will perform a DES based cost-utility analysis modelling individuals through cycles of treatment and multiple recurrent events until death due to cancer or other causes. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: true
+
+x <- 1
+```
+
+Events such as recurrence and death were assumed to occur in continuous time, while chemotherapy treatment was assumed to occur on discrete treatment cycles. 
+
+Time to event for the modelled events is estimated using as input the `colon` data set and applying a series of parametric survival models, while estimates for clinical input parameters (eg probability of toxicities, costs and utilities) are assigned hypothetical values. Adjuvant treatments (A and AB) are assumed for a maximum of $10$ cycles and last for $3$ weeks; toxicities may occur during a treatment cycle with a given probability that is treatment-specific, with a maximum of $1$ toxicity event that a patient can experience per treatment. Utility during therapy and recurrence does not differ between treatments as well as the disutility due to toxicity, which is applied to the complete cycle in which a patient experiences a toxicity. QALYs are obtained by discounting and integrating utility over the duration of the cycle, while individuals experiencing a recurrence incur in a one-time cost assumed to be independent of treatment.
+
+DESs may be implemented in `R` in different ways. In our example, we will use the package `simmer`, which implements a process-based approach, which requires the definition of two objects: the *trajectory* and the *simulation environment*. 
+
+The trajectory defines the structure of the model, consisting in what events the simulated individuals may experience and what actions are performed. They are defined using the `trajectory()` function, which defines an empty trajectory that can be expanded using different building blocks:
+
+  - *Attributes* store numerical information on an individual or global level, such as characteristics (eg disease stage), outcomes (eg accrued QALYs and costs), and individualised model parameters (eg sampled time-to-events or risk predictions).
+  
+  - *Timeouts* control the duration of time between different events or actions.
+  
+  - *Resources* refer to shared objects between agents which may have limited capacity, such as the number of nurses in a department, number of operating rooms, number of times a given device can be used on a given day.
+  
+  - *Branches* allocate individuals to different sub-trajectories and can be used to implement competing risks (eg continuing to next treatment cycle or stopping treatment).
+  
+  - *Rollbacks* move an individual a number of steps back in the trajectory and can be used to repeat sections of the trajectory, useful for modelling repetitive activities such as treatment cycles.
+  
+The simulation environment defines how many individuals enter the trajectory and when they enter, as well as what information should be gathered about the individuals and the resources throughout the simulation. It can be defined using the `simmer()` function, which can be expanded using different building blocks:
+
+  - *Generators* define the cohort of agents that will be simulated.
+  
+  - *Resources* define the amount and schedule of a type of resource to be available in the simulation.
+  
+  - *Simulations* can be performed using the `run()` function.
+  
+  - *Outcomes* are saved in the simulation environment and can be extracted using dedicated functions which return long-formatted data sets with complete logs of how values have changed throughout the simulation.
+
+We illustrate how the `simmer` package may be used to implement DES to the colon cancer example using different code snippets of different parts of the trajectory as the complete trajectory is too large to consider here. This means that these snippets cannot be run independently. The full code is available in the online appendix of the book: [https://gianluca.statistica.it/books/online/r-hta](https://gianluca.statistica.it/books/online/r-hta).
+
+
+### Initialisation
+
+The first step is to define the main trajectory and initialise a set of individual-level attributes to track the treatment group, the time of death from background mortality and the time to recurrence, the number of adjuvant cycles received, the number of toxicities, the discounted costs and QALYs. The values are set using the `fn_initialisation()` function.
+
+```{r}
+#| echo: true 
+#| eval: false
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+library(simmer) #load package
+#define main trajectory object
+traj_main <- trajectory(name = "traj_main") %>%
+
+  #initialisation
+
+#record individual-level attributes
+  set_attribute(keys = c("TreatmentArm", "BS", 
+    "RFS", "AdjuvantCycles", "Toxicities", "dCosts", "dQALYs"),
+    values = function() fn_initialisation())
+```
+
+### Ajuvant treatment
+
+To implement adjuvant treatment cycles, a branch is used to determine whether individuals will receive any adjuvant treatment based on the arm. Within the adjuvant treatment sub-trajectory, the first step is to determine what event will happen in the treatment cycle and what the duration of the cycle will be using the custom `fn_adjuvant_cycles()` function: 1) *death*, due to the background mortality information stored for each individual in the `BS` attribute; 2) *Recurrence*, due to its time-to-recurrence information stored in the `RFS` attribute, after which the cycle will ended and the individual treated for the recurrence; 3) *Complete cycle*, due to no experiencing neither of the above events, so that the treatment cycle is ended and a next cycle can be started if the maximum number of cycles has not been reached.
+
+After determining the event and time-to-event for the treatment cycle, the health and economic impact of the cycle is determined, and the individual is delayed for the duration of the cycle using the `timeout_from_attribute()` function. After processing the treatment cycle, a sequence of branches is used to determine what will happen next based on the `AdjuvantCycleEvent` attribute. If the individual deceased during the cycle, they will be directed to the final `traj_death` trajectory. If the individual is alive, the next branch checks whether a recurrence occurred, in which case they are directed to the `traj_recurrence` trajectory. Otherwise, a `rollback()` function is used to return the individual back to the beginning of the adjuvant treatment branch, if the maximum number of cycles has not been reached.   
+
+```{r}
+#| echo: true 
+#| eval: false
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+
+  #Adjuvant treatment
+
+#determine if individuals receive trt, if trt =1 or 2 they enter the branch, otherwise they skip the branch
+branch(
+  option = function()
+    get_attribute(.env = sim,
+                  keys = "TreatmentArm") %in% c(1, 2), 
+  continue = TRUE,
+  
+  #traj to determine what happens in branch
+  trajectory()
+  %>%
+    
+  #record event and duration of cycle
+  set_attribute(
+    keys = c("AdjuvantCycleEvent", "AdjuvantCycleTime"),
+    values = function()
+      fn_adjuvant_cycle(
+        attrs = get_attribute(.env = sim, 
+                              keys = c("BS", "RFS")),
+        t_now = now(.env = sim)
+      )
+  ) %>%
+    
+  #update number of cycles, toxicities, costs and QALYs
+  set_attribute(
+    keys = c("AdjuvantCycles", "Toxicities", "dCosts", "dQALYs"),
+    values = function()
+      fn_adjuvant_impact(
+        attrs = get_attribute(.env = sim,
+                              keys = c("TreatmentArm", "AdjuvantCycleTime")),
+        t_now = now(.env = sim)
+      ),
+    mod = "+"
+  ) %>%
+  
+  #delay for duration of that cycle
+   timeout_from_attribute(key = "AdjuvantCycleTime") %>%
+    
+  #check what will happen next based on AdjuvantCycleEvent
+    #1=death, 2=recurrence, 3=no recurrence or death
+  
+   #check if individual is alive
+   branch(
+     option = function() {
+       get_attribute(.env = sim, 
+                     keys = "AdjuvantCycleEvent") == 1
+       },
+     continue = FALSE,
+     traj_death
+   ) %>%
+   #check is individual free of cancer recurrence
+   branch(
+     option = function(){
+       get_attribute(.env = sim,
+                     keys = "AdjuvantCycleEvent") == 2
+     },
+     continue = FALSE,
+     traj_recurrence
+   ) %>%
+   #check if max number of cycles reached
+   rollback(
+     target = 5,
+     check = function(){
+       get_attribute(.env = sim, 
+                     keys = "AdjuavntCycles") < m_max_adjuvant_cycles
+     }
+   )
+)
+```
+
+
+### Long-term follow-up
+
+If an individual did not receive adjuvant treatment or completed the maximum number of cycles, the long-term outcomes need to be determined based on two competing events: 1) *death* without cancer recurrence due to background mortality information; 2) *recurrence* at a certain point in time based on their time-to-recurrence information, after which they will be treated for the recurrence. After the `FollowUpTime` is determined, the impact in terms of QALYs is assessed and added to the `dQALYs` attribute (assume no costs for the long-term follow-up). After delaying the individual for the time-to-event, the event is to be processed using a branch, where deceased individuals are directed to the `traj_death` trajectory and individuals with a cancer recurrence to the `traj_recurrence` trajectory. 
+
+```{r}
+#| echo: true 
+#| eval: false
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+
+  #Long-term follow-up
+
+#record time until recurrence or non-cancer death
+#1=death, 2=recurrence
+
+ set_attribute(
+  keys = c("FollowUpTime", "FollowUpEvent"),
+  values = function() c(
+    FollowUpTime = min(get_attribute(.env = sim,
+                                     keys = c("BS", "RFS"))) - 
+      now(.env = sim), FollowUpEvent = which.min(
+        get_attribute(.env = sim, keys = c("BS", "RFS"))
+      )
+  )
+) %>%
+  
+#update QALYs
+ set_attribute(keys = "dQALYs",
+               mod = "+",
+               values = function() fn_discount_QALYs(
+                 utility = u_diseasefree,
+                 t_start = now(.env = sim),
+                 t_duration = get_attribute(.env = sim,
+                                            keys = "FollowUpTime"))  
+                 ) %>%
+   
+#delay until death or cancer recurrence
+ timeout_from_attribute(key = "FollowUpTime") %>%
+   
+#check if event death or cancer recurrence
+ #1=death, 2=recurrence   
+
+ branch(option = function() get_attribute(.env = sim,
+                                          keys = "FollowUpEvent"),
+        traj_death,
+        
+        traj_recurrence
+        
+) #end of main trajectory  
+```
+
+### Recurrence
+
+Upon cancer recurrence, individuals are directed to the `traj_recurrence` which processes the outcome and impact of treatment for advanced disease. When individuals have advanced cancer, they are at risk of dying from cancer and the cancer-specific survival has to be sampled and stored in the `CSS` attribute through the custom `fn_advanced_time()` function. After determining the impact of treatment for advanced disease, the individual is delayed for the duration of `CSS` using the `timeout_from_attribute()` function before directing it to the `traj_death` trajectory.
+
+```{r}
+#| echo: true 
+#| eval: false
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+  # sub-trajectory for treatment of recurrence/advanced disease
+
+traj_recurrence <- trajectory(name = "traj_recurrence") %>%
+  
+  #treatment of advanced disease
+
+#record the time until death
+  set_attribute(keys = "CSS",
+                values = function() fn_advanced_time(
+                  attrs = get_attribute(.env = sim, 
+                                        keys = c("TreatmentArm", "BS"))
+                ) 
+  ) %>%
+  
+#update costs and QALYs
+  set_attribute(keys = c("dCosts", "dQALYs"),
+                values = get_attribute(.env = sim, 
+                                       keys = "CSS"),
+                mod = "+") %>%
+  
+#delay until death
+  timeout_from_attribute(key = "CSS") %>%
+  
+#death: go to traj_death sub-trajectory 
+  join(traj_death)
+```
+
+### Death
+
+At the end of the simulation, the overall survival is recorded in the `OS` attribute. 
+
+```{r}
+#| echo: true 
+#| eval: false
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+  # sub-trajectory to record survival upon death
+
+traj_death <- trajectory(name = "traj_death") %>%
+  
+#record survival
+  
+  set_attribute(.env = sim, 
+                keys = "OS",
+                values = function() now(.env = sim))
+```
+
+### Run the simulation
+
+After defining the trajectory for the DES, the simulation environment can be defined and the simulation run. Using the `add_generator()` function, we define a prefix for the names of the individuals that they have to enter the `traj_main` trajectory and that the attributes are to be monitored throughout the simulation. After defining the simulation environment, the simulation can be run for each treatment separately and the simulation environment is rest using the `reset()` function before running the simulation using the `run()` function. The monitored attributes are then extracted using the custom `fn_summaries` function. The resulting data frames contain the individual-level HE outcomes, which can be aggregated to compare the different treatments.  
+
+```{r}
+#| echo: true 
+#| eval: false
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+  # define the simulation environment
+
+n_individuals <- 50000
+
+sim <- simmer() %>%
+  add_generator(name_prefix = "Patient_",
+                trajectory = traj_main,
+                distribution = at(rep(x = 0, times = n_individuals)),
+                mon = 2)
+
+#run the simulation and summarise outcomes for treatment None
+treatment_arm <- 0; set.seed(1); sim %>% reset() %>% run(until = Inf)
+df_0 <- fn_summarise(df_sim = get_mon_attributes(sim))
+
+#run the simulation and summarise outcomes for treatment A
+treatment_arm <- 1; set.seed(1); sim %>% reset() %>% run(until = Inf)
+df_1 <- fn_summarise(df_sim = get_mon_attributes(sim))
+
+#run the simulation and summarise outcomes for treatment AB
+treatment_arm <- 2; set.seed(1); sim %>% reset() %>% run(until = Inf)
+df_2 <- fn_summarise(df_sim = get_mon_attributes(sim))
+
+#extract results
+v_costs <- c(mean(df_0$dCosts, mean(df_1$dCosts), mean(df_2$dCosts)))
+v_effs <- c(mean(df_0$dQALYs, mean(df_1$dQALYs), mean(df_2$dQALYs)))
+v_strategies <- c("None", "A", "AB")
+df_ce <- data.frame("Costs" = v_costs, "Effs" = v_effs, "Strategies" = v_strategies)
+
+#get summaries
+res <- calculate_icers(df_ce$Costs,df_ce$Effs,df_ce$Strategies)
+```
+
+# Population-Adjusted Indirect Comparisons {#sec-paic}
+
+## Introduction
+
+Standard NMA are widely used to estimate relative treatment effects between multiple treatments from several RCTs under the assumption that any effect-modifying variables are balanced between populations of the included trials. There are also methods that attempt to relax this assumption by accounting for effect modifiers in order to create population-adjusted estimates, mostly in terms of patient characteristics, differences in study-level effect modifiers related to the design of the trials (eg treatment administration). *Population-adjusted methods* are also used to incorporate single-arm studies or connect disconnected networks under stronger assumptions, and are seeing increasing use in HTA[@phillippo2018methods]. We fist outline the assumptions required to use these methods and list currently available approaches depending on the level of data available: full individual-level data; individual-level data from some studies and aggregate-level data from others; only aggregate-level data. 
+
+Covariate variables, included in the analysis in order to adjust the estimate a certain treatment effect of interest, may be effect modifiers, prognostic factors, or both and their interpretation is specific to the chosen effect measure scale. *Effect modifiers* are variables that alter the relative effect of a treatment on a given scale (eg odds ratios) so that treatment is more or less effective depending on the level of the effect modifier. *Prognostic factors* are variables that affect outcomes on all treatments equally. NMAs rely on assumption of exchangeability, ie relative treatment effects are the same across all included studies, also known as assumption of *constancy of relative effects*. This assumption may be violated if there are effect-modifiers present, which may lead to biased estimates. In addition, even if effect-modifiers are balanced between study populations, if these do not represent the target population for a treatment decision, then NMA estimates must be produced that are relevant to the decision target population. 
+
+With population-adjusted methods the objective is to estimate relative treatment effects for a target population of interest. In the case of a connected network, these methods attempt to adjust for effect-modifiers to relax the constancy assumption to *conditional constancy of relative effects* assumption, ie assume that relative effects can be predicted across populations based on the included effect-modifiers. This requires that all effect-modifiers are included and correctly specified in the analysis and may be violated in the presence of unobserved effect-modifiers that are unbalanced between populations. 
+
+Population-adjusted methods may also be used to incorporate single-arm studies or disconnected networks under a stronger assumption, known as *conditional constancy of absolute effects*. Based on this assumption, such analyses are defined either as *unanchored*, due to the lack of a common comparator to which analyses can be anchored, or *anchored*, due to the presence of a common comparator. 
+
+## Methods with full individual-level data
+
+In an ideal scenario, individual-level data are available from every study within an anchored network, in which case the "gold standard" for the analysis is an *individual-level network meta-regression for effect-modifiers*[@berlin2002individual]. These analyses can be performed using standard software packages, such as the `multinma` package in `R`. In the case of an unanchored network, involving single-arm or observational studies, a range of methods based on the causal inference literature may be used[@faria2015nice].  
+
+## Methods with mixtures of individual and aggregate-level data
+
+Several methods have been proposed for mixed data settings, which can be categorised as either *reweighting*-based or *regression*-based methods, which will be now briefly reviewed.
+
+### Matching-Adjusted Indirect Comparison
+
+*Matching-Adjusted Indirect Comparison* (MAIC) is a reweighting approach which derives weights for individuals in am individual-level study to match the summary statistics of covariates in an aggregate-level study[@ishak2015simulation]. MAIC is designed for a two-study scenario, where in anchored settings there is a single individual-level study comparing treatment B with A, and a single aggregate-level study comparing treatment C with A, so to obtain a comparison of C with B in the AC population. The individual-level study reports outcomes $y_{ik(AB)}$ and covariates $x_{ik(AB)}$ for each individual $i$ receiving treatment $k$ from the AB study population, while the aggregate-level study reports an estimated treatment effect $\hat{\Delta}_{AC(AC)}=g(\bar{y}_{C(AC)})-g(\bar{y}_{A(AC)})$ with standard errors $s_{AC(AC)}$ and summary covariates statistics $\bar{x}_{(AC)}$. The relative treatment effect is taken on a suitable transformed scale given by the link function $g(\cdot)$, eg logit. 
+
+MAIC estimates the expected outcomes $\hat{y}_{k(AC)}$ on treatments $k=A,B$ in the AC population as a weighted average of the individual outcomes in the AB population:
+
+$$
+\hat{y}_{k(AC)}=\frac{\sum_i y_{ik(AB)}w_{ik}}{\sum_i w_{ik}},
+$$
+
+where the participant weights $w_{ik}$ are often derived using the methods of moments. This is equivalent to a minimisation problem, where we want to minimise the overall difference between the reweighted covariate distribution and the AC summary statistics. After centring the covariates $\bar{x}_{(AC)}=0$, the minimisation problem can be written as:
+
+$$
+\hat{\alpha}=\text{argmin}_{\alpha}\sum_{k=A,B}\sum_i\text{exp}(x_{ik}\alpha),
+$$
+where the weights are then equal to $w_{ik}=\text{exp}(x_{ik(AB)}\hat{\alpha})$. Using this approach, MAIC estimates the population-averaged marginal relative effect $\Delta_{BC(AC)}$ of C vs B in the AC population in an anchored population-adjusted indirect comparison
+
+$$
+\hat{\Delta}_{BS(AC)}=\hat{\Delta}_{AC(AC)}-\hat{\Delta}_{AB(AC)},
+$$ {#eq-1}
+
+where $\hat{\Delta}_{AB(AC)}=g(\hat{y}_{B(AC)}-\hat{y}_{A(AC)})$.
+
+In an unanchored setting, there is no common A arm, and the above approach derives the reweighted estimate $\hat{y}_{B(C)}$ before forming the unanchored population-adjusted indirect comparison with the estimated absolute outcomes on treatment C in the C population
+
+$$
+\hat{\Delta}_{BC(C)}=g(\hat{y}_{C(C)}-\hat{y}_{B(C)}).
+$$ {#eq-2}
+
+Adequate prediction of absolute outcomes $\hat{y}_{B(C)}$ on treatment B in the C population not only requires accounting for differences in effect-modifiers between populations, but also prognostic factors that affect outcomes. Variance estimation for MAIC is often performed through either bootstrapping or robust sandwich estimators.
+
+As a weighting approach, MAIC cannot extrapolate, which requires the aggregate-level AC population to have sufficient overlap with the individual-level AB population. The approximate effective sample size $ESS=\frac{(\sum_{k=A,B}\sum_{i}w_{ik})^2}{\sum_{k=A,B}\sum_{i}w_{ik}}$ and visual inspection of the weight distribution can be useful diagnostics, where extreme weights or large reductions in ESS indicating poor overlap. MAIC is designed with a two-study indirect comparison and does not generalise to larger networks.
+
+### Simulated Treatment Comparison
+
+*Simulated Treatment Comparison* (STC) is an outcome regression approach, where a regression model fitted to the individual-level study is used to produce predictions in the aggregated-level study population[@caro2010no]. In an anchored STC, the predicted relative treatment effect of B vs A in the AC population is used to form an anchored population-adjusted indirect comparison as in @eq-1, while in an unanchored STC, the predicted average absolute outcome on treatment B in the C population is used to form an unanchored indirect comparison as in @eq-2. 
+
+Like MAIC, STC does not generalise to larger networks of studies or treatments, and can only produce estimates relevant to the aggregate-level study population. The most common form of anchored STC plugs-in mean covariate values from the AC population to obtain predicted outcomes on treatment A and B. However, when the model is non-linear in the covariates this results in aggregation bias, and when the outcome measure is non-collapsible (eg log odds ratios) it results in a biased indirect comparison. The original STC avoids this by simulating individuals from the AC study covariate distribution to calculate marginal relative effects $\Delta_{AB(AC)}$.
+
+### Multilevel Network Meta-Regression
+
+*Multilevel Network Meta-Regression* (ML-NMR) is a population adjustment method that generalises standard netowrk meta-regression to scenarios where some studies only provide aggregate-level data[@phillippo2020multilevel]. ML-NMR defines an individual-level regression model as in an individual-level NMR, which models outcomes for individual $i$ in study $j$ receiving treatment $k$ as:
+
+$$
+\begin{aligned}
+y_{ijk} &\sim \pi_{I}(\theta_{ijk})\\
+g(\theta_{ijk})&=\eta_{jk}(x_{ijk})=\mu_j + x_{ijk}(\beta_1+\beta_{2,k}) + \gamma_k,
+\end{aligned}
+$$
+where the individual outcomes are given suitable distributions $\pi_{I}(\cdot)$ with parameter $\theta_{ijk}$ modelled on a transformed linear predictor scale via the link function $g(\cdot)$. The linear predictor $\eta_{jk}(x_{ijk})$ has stratified study-specific intercepts $\mu_j$ to preserve randomisation, prognostic covariate effects $\beta_1$, effect-modifying interactions $\beta_{2,k}$, and individual-level treatment effects $\gamma_k$. Usually, we set $\beta_{2,A}=0$ and $\gamma_A=0$. 
+
+To incorporate aggregate-level evidence, the individual-level model is integrated over the summary covariate distributions in the aggregate-level study to form the aggregate-level model:
+
+$$
+\begin{aligned}
+y_{\cdot jk} &\sim \pi_{A}(\theta_{\cdot jk})\\
+\theta_{\cdot jk}&=\int_{\zeta}g^{-1}(\eta_{jk}(x))f_{jk}(x)dx,
+\end{aligned}
+$$
+where the subscript $\cdot$ denotes aggregate-level quantities. The marginalisation integral is usually evaluated by numerical methods such as *Quasi Monte Carlo* integration[@phillippo2020multilevel]. Fitting the ML-NMR requires the joint covariate distribution $f_{jk}(x)$ to be known in each aggregate-level study, but often only marginal summaries are available. The joint covariate distribution can be re-constructed from these summaries together with assumed forms for the marginal distributions and a correlation matrix using copulae. ML-NMR can produce population-adjusted estimates in any target population of interest $P$ with joint covariate distribution $f_{P}(x)$ between any pair of treatments $a$ and $b$ by integrating contrasts of the linear predictor on each treatment over the joint covariate distribution:
+
+$$
+d_{ab,P}=\int_{\zeta}(\eta_{b,P}(x)-\eta_{a,P}(x))f_{P}(x)dx=\bar{x}_P(\beta_{2,b}-\beta_{2,a})+\gamma_b-\gamma_a,
+$$
+which can be interpreted as the average of the individual-level treatment effects in population $P$, when moving the population from treatment $a$ to $b$. Note that the above computation requires information only on effect-modifying covariates in the target population, and not on the distribution of prognostic factors or baseline risk. Estimates of absolute outcomes, eg average event probabilities $\bar{p}_{k,P}$ for binary outcomes on each treatment $k$ in the population $P$, are obtained via the marginalisation integral:
+
+$$
+\bar{p}_{k,P} = \int_{\zeta}g^{-1}(\eta_{k,P}(x))f_{P}(x)dx.
+$$ {#eq-3}
+
+The full joint covariate distribution $f_{P}(x)$ is required and may be re-constructed from reported marginal summaries. This computation requires information on the distribution of both effect-modifying and prognostic covariates in the target population as well as the distribution of the individual-level baseline risk $\mu_P$, often obtained from a distribution on the average event probabilities on any given reference treatment $\bar{p}_{A,P}$ by inverting @eq-3. Population-average marginal treatment effects can then be obtained from the average absolute predictions.
+
+NM-NMR can synthesise networks of any size and with any number of individual-level and aggregate-level studies but, where there is a small number of aggregate-level studies for a treatment requires an additional identifying assumption to estimate the corresponding treatment-covariate interactions for this treatment. Interaction terms may be assumed common for a set of treatments, an assumption known as *shared effect-modifier assumption*,thus allowing sharing of interaction effects with another treatment for which individual-level data are available or across multiple aggregate-level treatments.  
+
+## Implementation in `R`
+
+We consider, as illustrative example, a network of treatments for moderate-to-severe plaque psoriasis[@phillippo2020multilevel]. A total of $9$ studies compared ixekizumab (IXE) every two weeks (Q2W) or four weeks (Q4W), secukinumab (SEC) at $150$ or $300$ mg dose, ustekinumab (UST) at a wight-based dose, and etanercept (ETN), along with placebo (PBO). These form the network, with individual-level data from four studies (UNCOVER-1,-2,-3,IXORA-S) and aggregate-level data from the remaining five studies (CLEAR,ERASURE,FEATURE,FIXTURE,JUNCTURE). Outcomes of interest included success/failure to achieve $75\%$ response on the psoriasis area and severity index (PASI) scale after $12$ weeks. Expert clinical opinion identified duration of psoriasis, previous systemic treartment, body surface area covered, weight, and psoriatic arthritis to be potential effect-modifiers. The individual-level outcomes/covariates and aggregate-level summaries are available in the `multinma` package in the objects `plaque_psoriasis_ipd` and `plaque_psoriasis_agd`, respectively. The first few rows of these data sets can be accessed by typing
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+library(multinma) #load package
+#inspect data sets
+head(plaque_psoriasis_ipd)
+head(plaque_psoriasis_agd)
+```
+
+We will consider the target population to be the one of the PROSPECT cohort study conducted in $335$ sites across Germany[@thacci2020secukinumab].
+
+### Anchored MAIC
+ 
+For the anchored MAIC analysis we compare secukinumab 300 mg vs ixekizumab Q2W via etanercept as a common comparator. Two individual-level studies (UNCOVER-2,-3) compare ixekizumab to etanercept and one aggregate-level study (FIXTURE) compares secukinumab to etanercept. We will derive weights for each of the UNCOVER studies to match their covariate distributions with the FIXTURE population, with the indirect comparison performed on the probit scale. First, we prepare the data, selecting relevant rows from the data sets and check for no missing data.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#select rows
+fixture_agd <- subset(
+  plaque_psoriasis_agd, studyc == "FIXTURE" & trtc %in% c("ETN", "SEC_300")
+)
+
+uncover_ipd <- subset(
+  plaque_psoriasis_ipd, studyc %in% c("UNCOVER-2", "UNCOVER-3") & trtc %in% c("ETN", "IXE_Q2W")
+)
+
+#check for no missing data
+all(complete.cases(
+  uncover_ipd[, c("pasi75", "durnpso", "prevsys", "bsa", "weight", "psa")]
+))
+```
+ 
+We first centre the covariates around the values in the aggregate-level FIXTURE study: for continuous variables we match on the first and second moments (ie mean and variance).
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#FIXTURE agg covariate summaries
+X_agd <- with(fixture_agd,
+              cbind(durnpso_mean, durnpso_mean^2 + durnpso_sd^2,
+                    prevsys / 100,
+                    bsa_mean, bsa_mean^2 + bsa_sd^2,
+                    weight_mean, weight_mean^2 + weight_sd^2,
+                    psa / 100))
+
+#convert to summaries across all arms
+X_agd <- apply(
+  X_agd, MARGIN = 2, FUN = weighted.mean, w = fixture_agd$sample_size_w0
+)
+
+#create matrix of centred UNCOVER ind covariates
+X_ipd <- sweep(with(uncover_ipd,
+                    cbind(durnpso, durnpso^2,
+                          prevsys, bsa, bsa^2, weight, weight^2, psa)),
+               MARGIN = 2, STATS = X_agd, FUN = "-")
+
+```
+
+We then define the objective and gradient functions for optimisation to estimate the participant weights. We use optimisation to obtain weights for the UNCOVER studies, separately for each study, to ensure that each is matched to the FIXTURE population.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#objective function
+objfn <- function(a1, X){
+  sum(exp(X %*% a1))
+}
+
+#gradient functions
+gradfn <- function(a1, X){
+  colSums(sweep(X, 1, exp(X %*% a1), "*"))
+}
+
+study_ipd <- uncover_ipd$studyc
+
+#estimate weights for UNCOVER-2
+opt_uncover2 <- optim(par = rep(0, ncol(X_ipd)),
+                      fn = objfn, gr = gradfn,
+                      X = X_ipd[study_ipd == "UNCOVER-2", ],
+                      method = "BFGS")
+
+a1_uncover2 <- opt_uncover2$par
+wt_uncover2 <- exp(X_ipd[study_ipd == "UNCOVER-2", ] %*% a1_uncover2)
+
+#normalise to sum to ESS 
+wt_uncover2 <- wt_uncover2 * sum(wt_uncover2) / sum(wt_uncover2^2)
+
+#do the same for UNCOVER-3
+opt_uncover3 <- optim(par = rep(0, ncol(X_ipd)),
+                      fn = objfn, gr = gradfn,
+                      X = X_ipd[study_ipd == "UNCOVER-3", ],
+                      method = "BFGS")
+
+a1_uncover3 <- opt_uncover3$par
+wt_uncover3 <- exp(X_ipd[study_ipd == "UNCOVER-3", ] %*% a1_uncover3)
+
+wt_uncover3 <- wt_uncover3 * sum(wt_uncover3) / sum(wt_uncover3^2)
+```
+
+We now examine the histograms of the weights and calculate the effective sample sizes.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+#| layout-ncol: 2
+#| label: fig-maic1
+
+#histograms of the weights
+hist(wt_uncover2, freq = FALSE, breaks = 50, main = NULL, xlab = "weight")
+hist(wt_uncover3, freq = FALSE, breaks = 50, main = NULL, xlab = "weight")
+
+#ESS
+sum(wt_uncover2)^2 / sum(wt_uncover2^2)
+sum(wt_uncover3)^2 / sum(wt_uncover3^2)
+```
+
+The lack of extreme weights and reasonable ESS in absolute terms do not highlight any specific problem. We then estimate the treatment effect of ixekizumab vs etanercept on the probit scale as a probit difference, interpreted as a standardised mean difference, using a weighted binomial GLM with probit link function and robust sandwich standard errors within each of the studies reweighted samples. Alternatively, bootstrapping can be performed. We combine the estimates with an inverse-variance meta-analysis (fixed effects) to obtain the overall estimate on the probit scale in the FIXTURE population.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+library(sandwich) #load package
+
+#IXE Q2W vs ETN from UNCOVER-2
+#fit glm 
+fit_uncover2 <- glm(
+  cbind(pasi75, 1-pasi75) ~ trtc,
+  data = uncover_ipd[study_ipd == "UNCOVER-2", ],
+  family = binomial(link = "probit"),
+  weights = wt_uncover2
+)
+#get probit diff
+d_uncover2 <- coef(fit_uncover2)["trtcIXE_Q2W"]
+#sanwich variance estimator
+var_uncover2 <- vcovHC(fit_uncover2)["trtcIXE_Q2W", "trtcIXE_Q2W"]
+
+#IXE Q2W vs ETN from UNCOVER-3
+#fit glm 
+fit_uncover3 <- glm(
+  cbind(pasi75, 1-pasi75) ~ trtc,
+  data = uncover_ipd[study_ipd == "UNCOVER-3", ],
+  family = binomial(link = "probit"),
+  weights = wt_uncover3
+)
+#get probit diff
+d_uncover3 <- coef(fit_uncover3)["trtcIXE_Q2W"]
+#sanwich variance estimator
+var_uncover3 <- vcovHC(fit_uncover3)["trtcIXE_Q2W", "trtcIXE_Q2W"]
+
+#get inverse-variance weighted estimate and SE
+d_ETN_IXE <- weighted.mean(c(d_uncover2, d_uncover3),
+                           c(1 / var_uncover2, 1 / var_uncover3))
+d_ETN_IXE
+
+se_ETN_IXE <- sqrt(1 / sum(1 / var_uncover2, 1 / var_uncover3))
+se_ETN_IXE
+```
+
+The estimated probit difference and standard error for secukinumab vs etanercept from the FIXTURE study is the computed as
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+fit_fixture <- glm(cbind(pasi75_r, pasi75_n - pasi75_r) ~ trtc,
+                   data = fixture_agd,
+                   family = binomial(link = "probit"))
+
+d_ETN_SEC <- coef(fit_fixture)[["trtcSEC_300"]]
+d_ETN_SEC
+
+se_ETN_SEC <- sqrt(vcov(fit_fixture)["trtcSEC_300", "trtcSEC_300"])
+se_ETN_SEC
+```
+
+Finally, we construct the population-adjusted indirect comparison of ixekizumab vs secukinumab in the FIXTURE population
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+d_SEC_IXE <- d_ETN_IXE - d_ETN_SEC
+d_SEC_IXE
+
+se_SEC_IXE <- sqrt(se_ETN_IXE^2 + se_ETN_SEC^2)
+se_SEC_IXE
+```
+
+A key limitation of MAIC is that it is only valid for the FIXTURE population, but this is not representative of the selected decision target population (PROSPECT). In addition, we did no use all available data, since two individual-level studies and four aggregate-level studies were excluded since they did not have an etanercept arm. 
+
+
+### Unacnhored MAIC
+
+In the event no common comparators are available in the network, an unanchored MAIC analysis may be conducted. The `R` coded is mostly the same as for the anchored analysis, so that the code for the data setup and weights derivation is not repeated here. After obtaining weights matching the UNCOVER-2 (`wt_IXE_uncover2`) and UNCOVER-3 (`wt_IXE_uncover3`) ixekizumab Q2W arms to the FIXTURE secukinumab 300 mg arm, these are used to estimate the average absolute outcomes on ixekizumab Q2W in the FIXTURE population.
+
+```{r}
+#| echo: true 
+#| eval: false
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#IXE Q2W prob from UNCOVER-2
+fit_IXE_uncover2 <- glm(
+  cbind(pasi75, 1-pasi75 ~ 1, 
+        data = subset(uncover_ipd, studyc = "UNCOVER-2" & trtc = "IXE_Q2W"),
+        family = binomial(link = "probit"),
+        weights = wt_IXE_uncover2)
+)
+
+#probit prob
+p_IXE_uncover2 <- coef(fit_IXE_uncover2)[["(Intercept)"]]
+#sandwich variance
+var_IXE_uncover2 <- vcovHC(fit_IXE_uncover2["(Intercept)", "(Intercept)"])
+
+#IXE Q2W prob from UNCOVER-3
+fit_IXE_uncover2 <- glm(
+  cbind(pasi75, 1-pasi75 ~ 1, 
+        data = subset(uncover_ipd, studyc = "UNCOVER-3" & trtc = "IXE_Q2W"),
+        family = binomial(link = "probit"),
+        weights = wt_IXE_uncover3)
+)
+
+#probit prob
+p_IXE_uncover3 <- coef(fit_IXE_uncover3)[["(Intercept)"]]
+#sandwich variance
+var_IXE_uncover3 <- vcovHC(fit_IXE_uncover3["(Intercept)", "(Intercept)"])
+
+#get inverse-variance weighted estimate and SE
+p_IXE <- weighted.mean(c(p_IXE_uncover2, p_IXE_uncover3),
+                       c(1 / var_IXE_uncover2, 1 / var_IXE_uncover3))
+se_IXE <- sqrt(1 / sum(1 / var_IXE_uncover2, 1 / var_IXE_uncover3))
+
+#probit event prob and SE for SEC from FIXTURE
+fit_SEC_fixture <- glm(cbind(pasi75_r, pasi75_n - pasi75_r) ~ 1,
+                       data = fixture_agd,
+                       family = binomial(link = "probit"))
+p_SEC <- coef(fit_SEC_fixture)[["(Intercept)"]]
+se_SEC <- sqrt(vcov(fit_SEC_fixture["(Intercept)", "(Intercept)"])) 
+
+#get unanchored pop-adjusted indirect comparison of IXE vs SEC in FIXTURE population
+d_un_SEC_IXE <- p_IXE - p_SEC #probit diff
+se_un_SEC_IXE <- sqrt(se_IXE^2 + se_SEC^2) #se
+```
+
+Unanchored MAIC estimates rely on much stronger assumptions that absolute outcomes can be predicted based on the included covariates, with also the usual limitation that such estimates are only relevant to the FIXTURE population and not the target population (PROSPECT).
+
+### ML-NMR
+
+We now use ML-NMR to analyse this network of evidence, allowing comparisons between any pair of treatments in the network as well as generation of estimates in any target population of interest. ML-NMR is implemented in the `multinma` package. After loading the package, we start by preparing the data by transforming the covariates so that binary variables or percentages are given as proportions and continuous covariates are approximately unit scaled. These changes are made to improve computational efficiency, and we also add a variable describing the treatment classes. Individuals with missing values for some covariates are excluded.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+library(multinma) #load package
+options(mc.cores = parallel::detectCores()) #run chains in parallel to improve efficiency
+
+#Ind studies
+pso_ipd <- transform(plaque_psoriasis_ipd,
+    bsa = bsa / 100,
+    weight = weight / 10,
+    durnpso = durnpso / 10,
+    prevsys = as.numeric(prevsys),
+    psa = as.numeric(psa),
+    trtclass = ifelse(trtc == "PBO", "Placebo",
+                      ifelse(trtc %in% c("IXE_Q2W","IXE_Q4W","SEX_150","SEC_300"),
+                             "IL-17-blocker",
+                             ifelse(trtc == "ETN", "TNFa blocker",
+                             ifelse(trtc == "UST", "IL-12/23 blocker", NA)))),
+is_complete = complete.cases(durnpso, prevsys, bsa, weight, psa))
+
+#remove incomplete cases
+pso_ipd <- subset(pso_ipd, is_complete)
+
+#Agg studies
+pso_agd <- transform(plaque_psoriasis_agd,
+    bsa_mean = bsa_mean / 100, 
+    bsa_sd = bsa_sd / 100,
+    weight_mean = weight_mean /10, 
+    weight_sd = weight_sd / 10,
+    durnpso_mean = durnpso_mean / 10, 
+    durnpso_sd = durnpso_sd / 10,
+    prevsys = prevsys / 100,
+    psa = psa / 100,
+    trtclass = ifelse(trtc == "PBO", "Placebo",
+                      ifelse(trtc %in% c("IXE_Q2W", "IXE_Q4W", "SEC_150", "SEC_300"),
+                            "IL-17 blocker",
+                            ifelse(trtc == "ETN", "TNFa blocker",
+                            ifelse(trtc == "UST", "IL-12/23 blocker", NA))))
+    )
+```
+
+We can then set up the network using the `set_ipd()` and `set_agd_arm()` functions to define the two data sources, and then use the `combine_network()` function to bring them together. We can then plot the network diagram using the `plot` function, which produces the graph shown in @fig-mlnmr1.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+#| label: fig-mlnmr1
+
+#set up network of ind and agg data
+pso_net <- combine_network(
+  set_ipd(pso_ipd,
+          study = studyc,
+          trt = trtc,
+          r = pasi75,
+          trt_class = trtclass),
+  set_agd_arm(pso_agd,
+              study = studyc,
+              trt = trtc,
+              r = pasi75_r,
+              n = pasi75_n,
+              trt_class = trtclass)
+)
+
+#create a network diagram
+plot(pso_net, weight_edges = TRUE, weight_nodes = TRUE, show_trt_class = TRUE)
+```
+
+To include the aggregate studies within the model, we need to set up the covariates for numerical integration through the `add_integration()` function, specifying: duration and weight to have a Gamma distribution to handle skewness in the individual-level data; body surface to have a logit-Normal distrbution; previous systemic treatment and plaque psoriasis to have a Bernoulli distribution.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#assign distributions for variables' integration in the model
+pso_net <- add_integration(pso_net,
+      durnpso = distr(qgamma, mean = durnpso_mean, sd = durnpso_sd),
+      prevsys = distr(qbern, prob = prevsys),
+      bsa = distr(qlogitnorm, mean = bsa_mean, sd = bsa_sd),
+      weight = distr(qgamma, mean = weight_mean, sd = weight_sd),
+      psa = distr(qbern, prob = psa))
+```
+
+We fit ML-NMR model to this network using the `nma()` function, specifying: a regression model including main covariate effects and treatment-covariate interactions; a probit link function with the two parameter Bernoulli approximation for the aggregate-level distribution; a shared effect-modifier assumption to identify all interaction terms; weakly informative priors on each parameter; set random initial values and QR decomposition to improve sampling efficiency. 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#fit ML-NRM model
+pso_fit_FE <- nma(pso_net,
+                  trt_effects = "fixed",
+                  link = "probit",
+                  likelihood = "bernoulli2",
+                  regression = ~(durnpso + prevsys + bsa + weight + psa)*.trt,
+                  class_interactions = "common",
+                  prior_intercept = normal(scale = 10),
+                  prior_trt = normal(scale = 10),
+                  prior_reg = normal(scale = 10),
+                  init_r = 0.1, QR = TRUE,
+                  chains = 2, iter = 200 #set n chains and iterations
+)
+```
+
+Parameter summaries can now be obtained for each parameter using the `print` function, for example for the individual-level treatment effects called "d". 
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#print posterior summaries
+print(pso_fit_FE, pars = "d")
+```
+
+We can then obtain population-average conditional relative treatment effects, predictions of absolute outcomes, and population-average marginal treatment effects for each of the study populations in the network
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#relative effects
+relative_effects(pso_fit_FE)
+
+#avg event probs
+predict(pso_fit_FE)
+
+#marginal effects
+marginal_effects(pso_fit_FE, mtype = "link")
+```
+
+If we are interest in estimates for a specific target population (PROSPECT), we require a data frame containing the related covariate summary information, which can then be used to generate population-average conditional treatment effects using the `relative_effects()` function and setting the argument `all_contrasts = TRUE` to estimate every pairwise comparison.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#set up agg target pop data set
+prospect_dat <- data.frame(
+  studyc = "PROSPECT",
+  durnpso = 19.6 / 10,
+  durnpso_sd = 13.5 / 10,
+  prevsys = 0.9095,
+  bsa = 18.7 / 100,
+  bsa_sd = 18.4 / 100,
+  weight = 87.5 / 100,
+  weight_sd = 20.3 / 100,
+  psa = 0.202
+)
+
+#compute relative effects
+relative_effects(pso_fit_FE, 
+                 newdata = prospect_dat,
+                 study = studyc,
+                 all_contrasts = TRUE)
+```
+
+To produce absolute event probabilities, we first need to set up numerical integration for the target population, in this case using the same forms of the marginal distributions and individual-level covariance matrix stored in the network object. Next, we also need a distribution for the baseline risk, typically by assuming a distribution on the average response probability (here assumed to follow a Beta distribution). We can then also plot the predicted probabilities, as shown in @fig-mlnmr2, using the `plot` function.
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+#| label: fig-mlnmr2
+
+#set up data for integration and compute absolute event probs
+prospect_dat <- add_integration(prospect_dat,
+      durnpso = distr(qgamma, mean = durnpso, sd = durnpso_sd),
+      prevsys = distr(qbern, prob = prevsys),
+      bsa = distr(qlogitnorm, mean = bsa, sd = bsa_sd),
+      weight = distr(qgamma, mean = weight, sd = weight_sd),
+      psa = distr(qbern, prob = psa),
+      cor = pso_net$int_cor)
+
+prospect_prec <- predict(pso_fit_FE,
+      type = "response",
+      newdata = prospect_dat,
+      study = studyc,
+      baseline = distr(qbeta, 1156, 1509-1156),
+      baseline_type = "response",
+      baseline_level = "aggregate",
+      baseline_trt = "SEC_300")
+
+#show results
+prospect_prec
+
+#plot results
+plot(prospect_prec)
+```
+
+These probabilities can be used to generate population-average marginal treatment effects on a selected scale (here probit).
+
+```{r}
+#| echo: true 
+#| eval: false
+#| message: false
+#| warning: false
+#| error: false 
+#| code-fold: "show"
+
+#get marginal trt effects
+marginal_effects(pso_fit_FE,
+  mtype = "link", #probit scale
+  newdata = prospect_dat,
+  study = studyc,
+  baseline = distr(qbeta, 1156, 1509-1156),
+  baseline_type = "response",
+  baseline_level = "aggregate",
+  baseline_trt = "SEC_300")
+#results not shown here
+```
+
+## Conclusion
+
+Population-adjusted methods ar increasingly used in HTA submissions, where manufacturers have individual-level data from their own studies but only aggregate-level data from studies of their competitors. Currently, ML-NMR is then only approach that can produce estimates in any target population of interest. Estimates of population-average treatment effects are required for decision-making, but marginal and conditional effects do not generally coincide. For CE decisions, the relevant estimand is the expected net benefit over the population which, in the presence of heterogeneous treatment effects, should be accounted for in a suitable economic model. The outputs from population-adjusted analyses are then the inputs to the economic model, often defined in terms of absolute effects on each treatment. Unanchored indirect comparisons rely on very strong assumptions that all effect-modifiers and prognostic factors in imbalance between studies have been accounted, which if violated lead to biased estimates. 
+
+
+# References
+
+
+
