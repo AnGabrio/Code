@@ -124,7 +124,7 @@ confint(sur_ec, level = 0.95)
 
 #combine OLS/SUR with bootstrapping to obtain distributions of statistics of interest 
 #such as mean QALY/TC by arm and mean differences between groups
-source("code_functions_test.R") #this loads all pre-built functions stored in the R file called code_functions.R
+source("code_functions.R") #this loads all pre-built functions stored in the R file called code_functions.R
 #get bootstrap results (200 iterations)
 set.seed(2345)
 boot_res <- boot_ec(dataset, QALYreg = QALY ~ trt + u0,
@@ -246,8 +246,8 @@ summary(tsboot_res$TC_boot$Delta_c)
 summary(tsboot_res$TC_boot$mu_c_ctr)
 summary(tsboot_res$TC_boot$mu_c_int)
 #compute percentile or BCa CIs
-tsboot_ci_perc <- boot_ci(x = tsboot_res, method = "BCa")
-tsboot_ci_perc
+tsboot_ci_Bca <- boot_ci(x = tsboot_res, method = "BCa")
+tsboot_ci_Bca
 
 
 #VERSION 5: dealing with missing data
@@ -306,6 +306,7 @@ pM_New["TC",c("u0")] <- 0 #require that TC is never imputed using u0
 pM_New[,c("trt")] <- 0 #require that any variable is never imputed using trt
 meth_New <- mice_New$method #extract default imputation methods
 M <- 30 #number of imputations
+#set rng for reproducibility
 set.seed(2345)
 #implement MICE to old and new group
 mice_Old_fit <- mice(dataset.mis_Old, predictorMatrix = pM_Old, method=meth_Old, m = M, print = FALSE)
@@ -323,9 +324,144 @@ diff_new_vs_old <- list("New vs Old" = c(-1, 1))
 confint(contrast(em_lme_mu_data.mi_e, diff_new_vs_old))
 confint(contrast(em_lme_mu_data.mi_c, diff_new_vs_old))
 
-#NOTE: I have only shown how to implement MICE to a dataset WITHOUT getting
-#bootstrap results. This is because combining MI with bootstrap is not simple
-#and things can be derived not in an unique way. I think the code above is enough
-#for one time.
+
+#combine MI with bootstrapping (two alternative options)
+library(mice)
+#first apply imputation model using mice to the original data. Make sure that
+#the imputation model is correctly defined, especially in terms of predictor matrix,
+#number of imputations, and imputation method 
+#EXAMPLE: set up MICE inputs
+mice0_data <- mice(dataset.mis, print = FALSE, method = 'pmm', maxit = 0)
+pm <- mice0_data$predictorMatrix #extract default predictor matrix
+#customise pred matrix to your needs (row=variable to be imputed, column=variable used as predictor)
+#in the matrix an entry of 1 means that the corresponding column variable is used as predictor for the corresponding row variable
+pm["QALY",c("TC","u0")] <- 1 #require that QALY always imputed using TC and u0
+pm["QALY",c("c0")] <- 0 #require that QALY is never imputed using c0
+pm["TC",c("u0")] <- 0 #require that TC is never imputed using u0
+pm[,c("trt")] <- 0 #require that any variable is never imputed using trt
+meth <- mice0_data$method #extract default imputation methods
+M <- 5 #number of imputations (set low number to avoid long computation time in this case)
+#set rng for reproducibility
+set.seed(2345)
+#implement MICE to entire dataset (separate group imputation will be automatically done
+#when combining MI and bootstrapping in the following lines, so no need to specify it here)
+mice_data <- mice(dataset.mis, predictorMatrix = pm, method=meth, 
+                  m = M, print = FALSE)
+
+#combine MICE with bootstrapping based on OLS/SUR analyses to obtain distributions of statistics of interest 
+#such as mean QALY/TC by arm and mean differences between groups
+#get MI and bootstrap results (25 iterations x 5 imputations = 125 replications)
+
+#version MB: first generate M imputed datasets (outer loop) and then within each
+#imputed dataset generate B bootstrap replications (inner loop)
+set.seed(2345)
+boot_mi_res <- boot_mi_ec(x=mice_data, QALYreg = QALY~trt+u0, 
+                          TCreg = TC~trt+c0,method = "OLS",B=25,
+                          combine = "MB")
+#summarise B x M matrix of estimates in two possible ways:
+#1)average across imputations 
+MB_res_Delta_e <- apply(boot_mi_res$QALY_boot$Delta_e, 2, mean)
+MB_res_mu_e_ctr <- apply(boot_mi_res$QALY_boot$mu_e_ctr, 2, mean)
+MB_res_mu_e_int <- apply(boot_mi_res$QALY_boot$mu_e_int, 2, mean)
+MB_res_Delta_c <- apply(boot_mi_res$TC_boot$Delta_c, 2, mean)
+MB_res_mu_c_ctr <- apply(boot_mi_res$TC_boot$mu_c_ctr, 2, mean)
+MB_res_mu_c_int <- apply(boot_mi_res$TC_boot$mu_c_int, 2, mean)
+summary(MB_res_Delta_e)
+summary(MB_res_mu_e_ctr)
+summary(MB_res_mu_e_int)
+summary(MB_res_Delta_c)
+summary(MB_res_mu_c_ctr)
+summary(MB_res_mu_c_int)
+#compute 95% CIs using percentile method (BCa not uniquely defined)
+alpha <- 0.05 
+quantile(MB_res_Delta_e, probs = c(alpha/2,1-alpha/2))
+quantile(MB_res_mu_e_ctr, probs = c(alpha/2,1-alpha/2))
+quantile(MB_res_mu_e_int, probs = c(alpha/2,1-alpha/2))
+quantile(MB_res_Delta_c, probs = c(alpha/2,1-alpha/2))
+quantile(MB_res_mu_c_ctr, probs = c(alpha/2,1-alpha/2))
+quantile(MB_res_mu_c_int, probs = c(alpha/2,1-alpha/2))
+#2)average across imputations and bootstrap replicates
+MB_res_Delta_e <- c(boot_mi_res$QALY_boot$Delta_e)
+MB_res_mu_e_ctr <- c(boot_mi_res$QALY_boot$mu_e_ctr)
+MB_res_mu_e_int <- c(boot_mi_res$QALY_boot$mu_e_int)
+MB_res_Delta_c <- c(boot_mi_res$TC_boot$Delta_c)
+MB_res_mu_c_ctr <- c(boot_mi_res$TC_boot$mu_c_ctr)
+MB_res_mu_c_int <- c(boot_mi_res$TC_boot$mu_c_int)
+summary(MB_res_Delta_e)
+summary(MB_res_mu_e_ctr)
+summary(MB_res_mu_e_int)
+summary(MB_res_Delta_c)
+summary(MB_res_mu_c_ctr)
+summary(MB_res_mu_c_int)
+#compute 95% CIs using percentile method (BCa not uniquely defined)
+alpha <- 0.05 
+quantile(MB_res_Delta_e, probs = c(alpha/2,1-alpha/2))
+quantile(MB_res_mu_e_ctr, probs = c(alpha/2,1-alpha/2))
+quantile(MB_res_mu_e_int, probs = c(alpha/2,1-alpha/2))
+quantile(MB_res_Delta_c, probs = c(alpha/2,1-alpha/2))
+quantile(MB_res_mu_c_ctr, probs = c(alpha/2,1-alpha/2))
+quantile(MB_res_mu_c_int, probs = c(alpha/2,1-alpha/2))
+
+#version BM: first generate B bootstrap replications (outer loop) and then within each
+#bootstrapped dataset generate M imputations (inner loop)
+set.seed(2345)
+boot_mi_res <- boot_mi_ec(x=mice_data, QALYreg = QALY~trt+u0, 
+                          TCreg = TC~trt+c0,method = "OLS",B=25,
+                          combine = "BM")
+#summarise B x M matrix of estimates in two possible ways:
+#1)average across imputations 
+BM_res_Delta_e <- apply(boot_mi_res$QALY_boot$Delta_e, 1, mean)
+BM_res_mu_e_ctr <- apply(boot_mi_res$QALY_boot$mu_e_ctr, 1, mean)
+BM_res_mu_e_int <- apply(boot_mi_res$QALY_boot$mu_e_int, 1, mean)
+BM_res_Delta_c <- apply(boot_mi_res$TC_boot$Delta_c, 1, mean)
+BM_res_mu_c_ctr <- apply(boot_mi_res$TC_boot$mu_c_ctr, 1, mean)
+BM_res_mu_c_int <- apply(boot_mi_res$TC_boot$mu_c_int, 1, mean)
+summary(BM_res_Delta_e)
+summary(BM_res_mu_e_ctr)
+summary(BM_res_mu_e_int)
+summary(BM_res_Delta_c)
+summary(BM_res_mu_c_ctr)
+summary(BM_res_mu_c_int)
+#compute 95% CIs using percentile method (BCa not uniquely defined)
+alpha <- 0.05 
+quantile(BM_res_Delta_e, probs = c(alpha/2,1-alpha/2))
+quantile(BM_res_mu_e_ctr, probs = c(alpha/2,1-alpha/2))
+quantile(BM_res_mu_e_int, probs = c(alpha/2,1-alpha/2))
+quantile(BM_res_Delta_c, probs = c(alpha/2,1-alpha/2))
+quantile(BM_res_mu_c_ctr, probs = c(alpha/2,1-alpha/2))
+quantile(BM_res_mu_c_int, probs = c(alpha/2,1-alpha/2))
+#2)average across imputations and bootstrap replicates
+BM_res_Delta_e <- c(boot_mi_res$QALY_boot$Delta_e)
+BM_res_mu_e_ctr <- c(boot_mi_res$QALY_boot$mu_e_ctr)
+BM_res_mu_e_int <- c(boot_mi_res$QALY_boot$mu_e_int)
+BM_res_Delta_c <- c(boot_mi_res$TC_boot$Delta_c)
+BM_res_mu_c_ctr <- c(boot_mi_res$TC_boot$mu_c_ctr)
+BM_res_mu_c_int <- c(boot_mi_res$TC_boot$mu_c_int)
+summary(BM_res_Delta_e)
+summary(BM_res_mu_e_ctr)
+summary(BM_res_mu_e_int)
+summary(BM_res_Delta_c)
+summary(BM_res_mu_c_ctr)
+summary(BM_res_mu_c_int)
+#compute 95% CIs using percentile method (BCa not uniquely defined)
+alpha <- 0.05 
+quantile(BM_res_Delta_e, probs = c(alpha/2,1-alpha/2))
+quantile(BM_res_mu_e_ctr, probs = c(alpha/2,1-alpha/2))
+quantile(BM_res_mu_e_int, probs = c(alpha/2,1-alpha/2))
+quantile(BM_res_Delta_c, probs = c(alpha/2,1-alpha/2))
+quantile(BM_res_mu_c_ctr, probs = c(alpha/2,1-alpha/2))
+quantile(BM_res_mu_c_int, probs = c(alpha/2,1-alpha/2))
+
+#in the "code_functions.R" file I have also coded functions to combine MICE and bootstrapping 
+#when fitting GLM and MLM models (respectively called boot_mi_ec_glm and boot_mi_ec_mlm) which may
+#be used when combining bootstrapping and MI with inferences based on GL and ML models in a similar
+#way to the example above based on OLS/SUR models.
+
+#NOTE: there is no current standard approach for combining MI and bootstrapping results, with the MB and BM
+#version shown above been some of the possible approaches to be used and that have been partly 
+#explored in simulation studies. In general, they have produced not too different results and therefore, provided
+#a sufficiently large number of imputations and bootstrap replications are used, either of the two 
+#may be used. In practice, MB is quicker than BM since it only requires to apply bootstrapping M times, while
+#BM requires applying MI B times (with B usually >> M).
 
 
