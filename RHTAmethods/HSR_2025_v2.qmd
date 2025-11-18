@@ -1,0 +1,3119 @@
+---
+title: "Conducting model-based cost-effectiveness analyses:"
+subtitle: "A tutorial"
+format: 
+  beamer: 
+    navigation: horizontal
+    theme: Boadilla
+    colortheme: whale
+#highlight-style: monochrome
+code-block-bg: '#FFFFFF'
+code-block-border-left: '#FFFFFF'
+code-line-numbers: false
+keep-tex: false
+toc: true
+author: 
+  - \textbf{Andrea Gabrio}\newline\newline
+  - \small Department of Methodology and Statistics, FHML (UM)
+institute: 
+  - \scriptsize \olive \href{https://www.maastrichtuniversity.nl/gabrio}{\texttt{a.gabrio@maastrichtuniversity.nl}}
+  - \href{https://github.com/AnGabrio}{\texttt{https://github.com/AnGabrio}}
+  - \href{https://angabrio.github.io}{\texttt{https://angabrio.github.io}}
+#date-format: full
+#date: 18 November 2025
+#top-level-division: part
+bibliography: references_HSR2025v2.bib
+csl: apa.csl
+nocite: |
+  @*
+header-includes: 
+- \logo{\ifnum\thepage>1\includegraphics[height=.47cm]{UM_logo.png}\fi}
+- \titlegraphic{\centering\vspace*{-0.8cm}\hspace*{1.5cm}\includegraphics[height=1cm]{UM_logo.jpg}\;\;\; \includegraphics[height=1cm]{mu_sigma.jpg}\newline\newline \scriptsize HSR department seminar, 25 Oct 2025 - Maastricht}
+- \newcommand\hideit[1]{\only<0| handout:1>{\mbox{}}\invisible<0| handout:1>{#1}}
+- \usefonttheme[onlymath]{serif}
+- \setbeamertemplate{itemize item}{$\bullet$} 
+- \setbeamertemplate{itemize subitem}{--} 
+- \setbeamertemplate{navigation symbols}{}
+- \setbeamertemplate{page number in head/foot}{}
+- \newcommand{\UM}{\logo{\includegraphics[height=.37cm]{UM_logo.png}}\setbeamertemplate{sidebar right}{\vfill\llap{\insertlogo\hskip0.0cm}\vskip0.015cm}}\newcommand{\nologo}{\logo{}}
+- \makeatother\setbeamertemplate{footline}{
+  \leavevmode
+  \hbox{
+  \begin{beamercolorbox}[wd=.2\paperwidth,ht=2.25ex,dp=1ex,center]{author in head/foot}
+    \usebeamerfont{author in head/foot}A. Gabrio (UM)
+  \end{beamercolorbox}
+  \begin{beamercolorbox}[wd=.3\paperwidth,ht=2.25ex,dp=1ex,center]{title in head/foot}
+    Conducting CEA \hspace*{1ex}
+  \end{beamercolorbox}
+  \begin{beamercolorbox}[wd=.5\paperwidth,ht=2.25ex,dp=1ex,center]{date in head/foot}
+    HSR seminar, 18 Nov 2025 \hspace*{1ex}
+  \end{beamercolorbox}}
+  \vskip0pt}\makeatletter
+- \setbeamertemplate{navigation symbols}{}
+- \definecolor{darkgreen}{rgb}{0.0,0.2,0.13}
+- \definecolor{yellowgreen}{rgb}{0.6,0.8,0.2}
+- \definecolor{myred}{rgb}{0.9 0.17 0.31}
+- \definecolor{myblue}{rgb}{0.14 0.34 0.55}
+- \definecolor{mypurple}{rgb}{0.53 0.0 0.69}
+- \definecolor{olive}{rgb}{.2 .31 .09}
+- \definecolor{orange}{rgb}{1 0.5 0}
+- \definecolor{mygrey}{rgb}{.94 .94 .94}
+- \definecolor{amber}{rgb}{1.0, 0.75, 0.0}
+- \definecolor{spanishred}{RGB}{198 11 30}
+- \definecolor{spanishyellow}{RGB}{255 196 0}
+- \definecolor{nedred}{RGB}{200 16 46}
+- \definecolor{nedwhite}{RGB}{255 255 255}
+- \definecolor{nedblue}{RGB}{0 61 165}
+- \newcommand\myred{\color{myred}}
+- \newcommand\myblue{\color{myblue}}
+- \newcommand\mypurple{\color{mypurple}}
+- \newcommand\olive{\color{olive}}
+- \newcommand\orange{\color{orange}}
+- \newcommand\mygrey{\color{mygrey}}
+- \newcommand\amber{\color{amber}}
+- \newcommand\red{\color{red}}
+- \newcommand\blue{\color{blue}}
+- \newcommand\black{\color{black}}
+- \newcommand\white{\color{white}}
+- \newcommand\magenta{\color{magenta}}
+- \usepackage{etex}
+- \usepackage{graphicx,hyperref,epsfig,bm,xspace}
+- \usepackage{xcolor}
+- \usepackage{tikz,verbatim,listings}
+- \usetikzlibrary{shapes,arrows,decorations.pathreplacing,positioning,calc,quotes}
+- \lstset{basicstyle=\ttfamily\fontsize{6}{7}\selectfont\textcolor[rgb]{0.345,0.345,0.345},breaklines=true,tabsize=2,keywords={},linewidth=1\textwidth,backgroundcolor=\color{black!5},moredelim=[is][\color{red}]{~_}{~_},moredelim=[is][\textbf]{**}{**},moredelim=[is][\color{blue}]{*!}{*!},moredelim=[is][\color{green!60!black!80}]{'+}{'+},moredelim=[is][\color{red}]{_+}{_+},moredelim=[is][\color{green}]{'_}{'_}}
+- \usepackage[position=top]{subfig}
+- \usepackage{multirow}
+- \usepackage{booktabs}
+- \usepackage{bigdelim}
+- \usepackage{longtable}
+- \usepackage{makecell}
+- \usepackage{siunitx}
+- \usepackage{hyperref}
+- \usepackage{graphicx}
+- \usepackage{multirow}
+- \usepackage{amsmath,amssymb}
+- \usepackage{hyperref}
+- \usepackage[capitalise,noabbrev]{cleveref}
+---
+
+```{r, include=FALSE, message=FALSE, warning=FALSE, eval=TRUE}
+library(knitr)
+opts_chunk$set(prompt = TRUE, highlight = F, background = '#FFFFFF')
+```
+
+
+# Introduction \& Modelling in HTA
+
+```{r, echo=FALSE, eval=TRUE, message=FALSE, warning=FALSE}
+#library(missingHE)
+library(tidyverse)
+library(kableExtra)
+```
+
+## Health technology assessment (HTA)
+
+- \textbf{Objective}: Combine \red costs \black \& \blue benefits \black of a given intervention into a rational scheme for allocating resources
+
+```{=latex}
+\begin{tikzpicture}%[->,>=latex,shorten >=0pt,auto,node distance=3cm,ultra thin]
+
+\draw(-5,-1) node[align=center,rectangle,rounded corners=2ex,draw,fill=red,font=\sffamily\fontsize{9}{10}\selectfont,minimum width=2.2cm,minimum height=1cm](1){Statistical\\ model};
+
+
+\draw(0,-1) node[align=center,rectangle,rounded corners=2ex,draw,fill=gray,font=\sffamily\fontsize{9}{10}\selectfont,minimum width=2.2cm,minimum height=1cm](2){Economic\\ model};
+
+
+\draw(4,-1) node[align=center,rectangle,rounded corners=2ex,draw,fill=orange,font=\sffamily\fontsize{9}{10}\selectfont,minimum width=2.2cm,minimum height=1cm](3){Decision\\ analysis};
+
+
+\draw(-2.5,2) node[align=center,rectangle,rounded corners=2ex,draw,fill=blue!40,font=\sffamily\fontsize{9}{10}\selectfont,minimum width=2.2cm,minimum height=1cm](4){Uncertainty\\ analysis};
+
+
+\draw(-5.2,-2.7) node[align=center,rectangle,rounded corners,draw=none,font=\sffamily\tiny,text width=3cm](5){
+\begin{itemize}
+\item Estimates relevant parameters $\theta$
+\item Varies with the type of data (\& statistical approach!)
+\end{itemize}
+};
+
+
+\draw(-0.2,-2.65) node[align=center,rectangle,rounded corners,draw=none,font=\sffamily\tiny,text width=3.5cm](6){
+\begin{itemize}
+\item Combines parameters to obtain average measure for costs and effects
+\item Varies with the type of data \& statistical model used
+\end{itemize}
+};
+
+
+\draw(3.8,-2.8) node[align=center,rectangle,rounded corners,draw=none,font=\sffamily\tiny,text width=3.4cm](7){
+\begin{itemize}
+\item Computes suitable measures of ``cost-effectiveness''
+\item Dictates the best course of actions
+\item Standardised process
+\end{itemize}
+};
+
+
+\draw(0.7,2.05) node[align=center,rectangle,rounded corners,draw=none,font=\sffamily\tiny,text width=4.1cm](8){
+\begin{itemize}
+\item Assesses the impact of uncertainty on the results
+\item Mandatory in many jurisdictions (e.g. ZIN in NL)
+\end{itemize}
+};
+
+
+\draw [dashed,->,>=latex,shorten >=0pt,auto,node distance=3cm,ultra thin] (1.40) -- (4.220);
+\draw [dashed,->,>=latex,shorten >=0pt,auto,node distance=3cm,ultra thin] (4.320) -- (2.140);
+
+
+\draw [->,>=latex,shorten >=0pt,auto,node distance=3cm,ultra thin] (1.east) -- (2.west);
+
+
+\draw [->,>=latex,shorten >=0pt,auto,node distance=3cm,ultra thin] (2.east) -- (3.west);
+
+
+
+\draw(0.4,.15) node[align=center,rectangle,rounded corners,draw=none,font=\sffamily\tiny,text width=3.5cm](func1){
+\begin{itemize}
+\item[] $\myblue \Delta_e=f_e(\theta)$
+\item[] $\myblue \Delta_c=f_c(\theta)$
+\item[] $\white \ldots$
+\end{itemize}
+};
+
+
+
+\draw(4.1,.15) node[align=center,rectangle,rounded corners,draw=none,font=\sffamily\tiny,text width=3.5cm](func2){
+\begin{itemize}
+\item[] $\myblue \mbox{ICER}=g(\Delta_e,\Delta_c)$
+\item[] $\myblue \mbox{INB}=h(\Delta_e,\Delta_c;k)$
+\item[] $\myblue \qquad \qquad \ldots$
+\end{itemize}
+};
+
+\end{tikzpicture}
+```
+
+## ``Two-stage" approach to HTA
+
+```{=latex}
+\hspace{-0.9cm}
+\begin{tikzpicture}%[->,>=latex,shorten >=0pt,auto,node distance=3cm,ultra thin]
+\hspace{-.5cm}
+\onslide<1->{\draw(-5,-1) node[align=center,rectangle,rounded corners=2ex,draw,fill=red,font=\sffamily\fontsize{9}{10}\selectfont,minimum width=2.2cm,minimum height=1cm](1){Statistical\\ model};
+}
+
+
+\draw(0.5,-1) node[align=center,rectangle,rounded corners=2ex,draw,fill=gray,font=\sffamily\fontsize{9}{10}\selectfont,minimum width=2.2cm,minimum height=1cm](2){Economic\\ model};
+
+
+\draw(4,-1) node[align=center,rectangle,rounded corners=2ex,draw,fill=orange,font=\sffamily\fontsize{9}{10}\selectfont,minimum width=2.2cm,minimum height=1cm](3){Decision\\ analysis};
+
+
+\draw(-5,2) node[align=center,rectangle,rounded corners=2ex,draw,fill=blue!40,font=\sffamily\fontsize{9}{10}\selectfont,minimum width=2.2cm,minimum height=1cm](4){Uncertainty\\ analysis};
+
+
+\draw(-5.2,-2.75) node[align=center,rectangle,rounded corners,draw=none,font=\sffamily\tiny,text width=3cm](5){
+\begin{itemize}
+\item Estimates relevant parameters $\theta$
+\item Varies with the type of data (\& statistical approach!)
+\end{itemize}
+};
+
+
+\draw(0.3,-2.7) node[align=center,rectangle,rounded corners,draw=none,font=\sffamily\tiny,text width=3.5cm](6){
+\begin{itemize}
+\item Combines the parameters to obtain a population average measure for costs and effects
+\item Varies with the type of data \& statistical model used
+\end{itemize}
+};
+
+
+\draw(3.8,-2.85) node[align=center,rectangle,rounded corners,draw=none,font=\sffamily\tiny,text width=3.5cm](7){
+\begin{itemize}
+\item Computes suitable measures of ``cost-effectiveness''
+\item Dictates the best course of actions
+\item Standardised process
+\end{itemize}
+};
+
+
+\draw(-2.15,2.05) node[align=center,rectangle,rounded corners,draw=none,font=\sffamily\tiny,text width=3.7cm](8){
+\begin{itemize}
+\item Assesses the impact of uncertainty on the results
+\item Mandatory in many jurisdictions (eg ZIN)
+\end{itemize}
+};
+
+
+\draw [->,>=latex,shorten >=0pt,auto,node distance=3cm,thin] (1.north) -- (4.south);
+
+
+%\draw [->,>=latex,shorten >=0pt,auto,node distance=3cm,ultra thin] (1.east) -- (2.west);
+
+
+\draw [->,>=latex,shorten >=0pt,auto,node distance=3cm,ultra thin] (2.east) -- (3.west);
+
+
+
+\draw(1.0,3.5) node[align=center,draw=none,fill=none,minimum width=.5cm,minimum height=.5cm,font=\sffamily\fontsize{6}{7}\selectfont]{\olive 1.\ Estimation (base-case)};
+%\draw(4.3,3.5) node[align=center,draw=none,fill=none,minimum width=.5cm,minimum height=.5cm,font=\sffamily\fontsize{6}{7}\selectfont]{\olive 2.\ Probabilistic sensitivity analysis};
+\draw(1.8,3) node[align=center,draw,fill=none,minimum width=.5cm,minimum height=.5cm,font=\sffamily\fontsize{6}{7}\selectfont](9){$\theta$};
+\draw(1.8,1) node[align=center,circle,draw,fill=none,font=\sffamily\fontsize{6}{7}\selectfont](10){$y$};
+\draw(.5,1) node[align=center,fill=none,minimum width=.5cm,minimum height=.5cm,font=\sffamily\fontsize{6}{7}\selectfont](11){$p(y\mid \theta)$};
+\draw(.5,3) node[align=center,draw,ellipse,double,fill=none,minimum width=.3cm,minimum height=.25cm,font=\sffamily\fontsize{6}{7}\selectfont](12){$\hat\theta=f(Y)$};
+
+
+\draw(-3.5,-4.0) node[align=center,fill=none,minimum width=.5cm,minimum height=.5cm,font=\sffamily\fontsize{5}{6}\selectfont](){\textit{``Two-stage approach'' (Spiegelhalter, Abrams \& Myles, 2004)}};
+
+
+
+\draw [->,>=latex,shorten >=0pt,auto,node distance=3cm,ultra thin] (9.south) -- (10.north);
+\draw [dashed,->,>=latex,shorten >=0pt,auto,node distance=3cm,ultra thin] (11.north) -- (12.south);
+\draw [dashed,->,>=latex,shorten >=0pt,auto,node distance=3cm,thin,red!60] (12.220) to [out=220,in=130] (2.120);
+
+
+
+\draw(4.3,3.5) node[align=center,draw=none,fill=none,minimum width=.5cm,minimum height=.5cm,font=\sffamily\fontsize{6}{7}\selectfont]{\olive 2.\ Probabilistic sensitivity analysis};
+\draw(2.9,2.0) node[align=center,draw=none,fill=none,minimum width=.5cm,minimum height=.5cm,font=\sffamily\fontsize{6}{7}\selectfont,color=red]{$\Rightarrow$};
+\draw(5.4,3) node[align=center,circle,draw,fill=none,font=\sffamily\fontsize{6}{7}\selectfont](13){$\theta$};
+\draw(4.2,3) node[align=center,fill=none,minimum width=.5cm,minimum height=.5cm,font=\sffamily\fontsize{6}{7}\selectfont](14){$p(\theta)\red\leftrightsquigarrow\black g(\hat\theta)$};
+\draw [dashed,->,>=latex,shorten >=0pt,auto,node distance=3cm,thin,blue!40] (13.south) to [out=270,in=45] (2.60);
+
+\end{tikzpicture}
+```
+
+## Decision + Uncertainty* analysis 
+
+```{=latex}
+\vspace{7cm}
+\begin{tikzpicture}[remember picture,overlay]
+\only<1-2|handout:1-2>{
+\draw(0,4) node[align=center,rectangle,rounded corners,draw=none,text width=4.1cm, xshift=5cm,yshift=3.5cm](1){\fontsize{8}{8}\selectfont Cost-effectiveness plane};
+}
+
+\only<1|handout:1>{
+\node{\includegraphics[scale=.55]{figure/CEPlane_ICER}};
+}
+\only<1-2>{
+\draw(3.5,-.1) node[align=center,rectangle,rounded corners,draw=none,text width=4.1cm,xshift=3.6cm,yshift=3.4cm](8){\fontsize{8}{8}\selectfont $\Delta_e$};
+\draw(-.9,3.2) node[align=center,rectangle,rounded corners,draw=none,text width=4.1cm,xshift=3.6cm,yshift=3.4cm](8){\fontsize{8}{8}\selectfont $\Delta_c$};
+}
+
+\only<1|handout:1>{
+\draw(4.5,3.5) node[align=center,rectangle,rounded corners,draw=none,text width=4.1cm,xshift=4.5cm,yshift=3.5cm](8){\fontsize{7}{8}\selectfont $\myblue \Delta_e=\color{red} \underbrace{\myblue\mbox{E}[e \mid \hat{\theta}_1]}_{\hat\mu_{e1}} \myblue - \color{red} \underbrace{\myblue\mbox{E}[e \mid \hat{\theta}_0]}_{\hat\mu_{e0}}$};
+\draw(4.5,2.6) node[align=center,rectangle,rounded corners,draw=none,text width=4.1cm,xshift=4.5cm,yshift=3.5cm](8){\fontsize{7}{8}\selectfont $\myblue \Delta_c=\color{red} \underbrace{\myblue\mbox{E}[c \mid \hat{\theta}_1]}_{\hat\mu_{c1}} \myblue - \color{red} \underbrace{\myblue\mbox{E}[c \mid \hat{\theta}_0]}_{\hat\mu_{c0}}$};
+\draw(2.0,1.5) node[align=center,rectangle,rounded corners,draw=none,text width=6.0cm,xshift=4cm,yshift=3.5cm](8){\fontsize{8}{8}\selectfont 
+\begin{eqnarray*}
+\mbox{ICER}&\!\!\!\!=\!\!\!\!&\frac{\mbox{E$[\Delta_c]$}}{\mbox{E$[\Delta_e]$}}=\frac{\hat\mu_{c1}-\hat\mu_{c0}}{\hat\mu_{e1}-\hat\mu_{e0}} \\
+&\!\!\!\!=\!\!\!\!&\mbox{Cost per outcome}\end{eqnarray*}};
+}
+
+\only<2|handout:2>{
+\node{\includegraphics[scale=.55]{figure/CEPlane_empty}};
+\draw(4.5,3.5) node[align=center,rectangle,rounded corners,draw=none,text width=4.1cm,xshift=4.5cm,yshift=3.5cm](8){\fontsize{7}{8}\selectfont $\myblue \Delta_e=\red\underbrace{\myblue\mbox{E}[e \mid \theta_1]}_{\mu_{e1}} \myblue - \red\underbrace{\myblue\mbox{E}[e \mid \theta_0]}_{\mu_{e0}}$};
+\draw(4.5,2.6) node[align=center,rectangle,rounded corners,draw=none,text width=4.1cm,xshift=4.5cm,yshift=3.5cm](8){\fontsize{7}{8}\selectfont $\myblue \Delta_c=\red\underbrace{\myblue\mbox{E}[c \mid \theta_1]}_{\mu_{c1}} \myblue - \red\underbrace{\myblue\mbox{E}[c \mid \theta_0]}_{\mu_{c0}}$};
+\draw(.08,1.42) node[align=center,rectangle,rounded corners,draw=none,text width=4.1cm,xshift=3.7cm,yshift=3.5cm](8){\fontsize{5}{6}\selectfont $\red \bullet$};
+\draw(-4.5,-2.6) node[align=center,rectangle,rounded corners,draw=none,text width=4.1cm,xshift=6cm,yshift=3.5cm](8){\fontsize{7}{8}\selectfont $^*$Induced by $\myblue g(\hat{\theta}_0), g(\hat{\theta}_1)$};
+}
+\end{tikzpicture}
+```
+
+# Zorginstituut Nederland (ZIN) 2024 guidelines
+
+## ZIN 2024 guidelines: summary
+
+```{=latex}
+\begin{itemize}
+\item Cost-effectiveness in the Netherlands has become more and more important in reimbursement decisions of the \textit{National Health Care Institute} over the years
+\item \olive \textbf{Standardise} \black analyses to improve comparability and enhance quality
+\item Revision of elements for the ``\myblue\textbf{Reference Case}\black" to which all economic evaluations \textit{have to comply with}
+\begin{enumerate}
+\item \black \textbf{Perspective} \black of the analysis
+\item \black \textbf{PICOTS} \black criteria
+\item \black \textbf{Type} \black of evaluation
+\item \black \textbf{Data} \black (effectiveness, costs and QoL)
+\item \myred \textbf{Methods}\black
+\only<1>{
+\begin{itemize}
+\item[-] \myred \textbf{MB}\black: \myred Discount, Extrapolation, Subgroup, Uncertainty, Validation \black
+\item[-] EMP: Missingness, Adjustment, Uncertainty
+\end{itemize}
+}
+\pause
+\item \myred \textbf{Reporting} \black
+\only<2>{
+\begin{itemize}
+\item[-] \myred \textbf{Data}\black, \myred \textbf{Methods}\black, \myred \textbf{Results}\black
+\end{itemize}
+}
+\end{enumerate}
+\end{itemize}
+```
+
+## Analysis Methods in HTA
+
+- **Study Design**:
+
+  + Empirical - *costs \& effects at patient level from a controlled study*
+  + \myred \textbf{Model-based} \black - *expected costs \& effects estimated via simulation*
+
+. . .
+
+- **Choice of methods** depends on the study design:
+
+  + Account for patient-level data complexities (e.g. *imbalance*, *missingness*, *skewness*, *correlation*, *clustering*)
+  + In simulation, choice of \myred \textbf{model type and inputs} \black  should be based on the *research question* and *nature of the disease* 
+
+. . . 
+
+- Focus on \myred \textbf{recommended methods} \black in the context of a *homogeneous population*:
+
+  + \scriptsize No *systematic literature review* needed
+  + Annual *discounting* for costs at $3\%$  \& effects at $1.5\%$
+  + Model *evidence* come from randomised controlled trails
+  + *Extrapolation* based on parametric distributions
+  + No *subgroup* or *Value of Information* analysis
+  + No *validation* of source data  
+
+
+## Types of model-based analyses (Caro et al. 2012)
+
+- \olive \textbf{Decision-tree models} \black 
+
+  + *Simple* problems with *short* time horizon (Briggs et al. 2006)
+
+. . .
+
+- \olive \textbf{Cohort-Level models} \black
+
+  + Series of *health states* capture *key characteristics* (Siebert et al. 2012)
+
+. . .
+
+- \olive \textbf{Network Meta-Analyses} \black
+
+  + Formal *evidence synthesis* techniques from multiple studies(Sadeghirad et al. 2023)
+
+. . .
+
+- \olive \textbf{Individual-Level Models} \black
+
+  + *Complex* problems (Krijkamp et al. 2018) which may involve *resource constraints* (Karnon et al. 2014)
+
+. . .
+
+- \olive \textbf{Population-Adjusted Analyses} \black
+
+  + Evidence synthesis when comparison data *incomplete* (Phillippo et al. 2018)
+
+
+
+## Types of model-based analyses (Caro et al. 2012)
+
+- \olive \textbf{Decision-tree models} \black 
+
+  + *Simple* problems with *short* time horizon (Briggs et al. 2006)
+
+- \olive \textbf{Cohort-Level models} \black
+
+  + Series of *health states* capture *key characteristics* (Siebert et al. 2012)
+
+- \olive \textbf{Network Meta-Analyses} \black
+
+  + Formal *evidence synthesis* techniques from multiple studies(Sadeghirad et al. 2023)
+
+- \mygrey \textbf{Individual-Level Models} 
+
+  + \mygrey *Complex* problems (Krijkamp et al. 2018) which may involve *resource constraints* (Karnon et al. 2014)
+
+
+- \mygrey \textbf{Population-Adjusted Analyses} 
+
+  + \mygrey Evidence synthesis when comparison data *incomplete* (Phillippo et al. 2018)
+
+
+# Popular Decision-Analytic Models in HTA
+
+## Decision Trees
+
+- Use to graphically display a \olive \textbf{tree structure}\black:
+
+  + Alternative possibilities as \olive \textbf{branches}\black
+  + \olive \textbf{Distinct}\black and \olive\textbf{mutually exclusive}\black
+
+. . .
+
+- Branches are connected together through different types of \olive \textbf{Nodes}\black:
+
+  + \myred \textbf{Decision}\black $\rightarrow$ root of the tree (eg alternative trt choices)
+  + \myblue \textbf{Chance}\black $\rightarrow$ probability of event occurrence (eg success/failure)
+  + \olive \textbf{Terminal}\black $\rightarrow$ given "value" (eg cost/benefit)
+  
+. . .
+
+- At each node, probabilities \myblue $p_{j}$ \black of an event $x_j$ given a past event $x_i$:
+
+  + are \myblue \textbf{conditional} probabilities \black $\rightarrow$ \myblue $p_{j}=p(x_j\mid x_i)$ \black
+  + must sum up to one
+
+## Decision Trees
+
+- \textbf{Example}:
+
+  + Two treatments are compared to no treatment (None, A, B)
+  + Each has costs/benefits \myred $v_j$ \black in terms of \myblue $p_j$ \black of being successful 
+
+. . .
+
+```{=latex}
+\begin{center}
+\scalebox{1.15}{
+\begin{tikzpicture}
+[
+ node distance=1cm,
+]
+\node[rectangle, draw, align=center, top color=white, 
+bottom color=red!20,label=$1$, font=\small, very thick](root) at (0,0) {};
+\node[right of=root, circle, draw, align=center, top color=white, 
+bottom color=blue!20,label=$3$, font=\scriptsize, very thick, scale=.5](drugb) at (1,0) {}; 
+\node[above right of=root, circle, draw, align=center, top color=white, 
+bottom color=blue!20,label=$2$, font=\scriptsize, very thick, scale=.5](druga) at (1,1) {};
+\node[below right of=root, isosceles triangle, rotate=180, draw, align=center, top color=white, 
+bottom color=green!20,label=$8$, font=\scriptsize, very thick, scale=.5](none) at (1,-1) {};
+\node[above right of=druga, isosceles triangle, rotate=180, draw, align=center, top color=white, 
+  bottom color=green!20,label=$4$, font=\scriptsize, very thick, scale=.5](Sdruga) at (3,2) {};
+\node[below right of=druga, isosceles triangle, rotate=180, draw, align=center, top color=white, 
+  bottom color=green!20,label={[label distance=-0.7cm]:$5$}, font=\scriptsize, very thick, scale=.5](Fdruga) at (3,2.1) {};
+\node[above right of=drugb, isosceles triangle, rotate=180, draw, align=center, top color=white, 
+  bottom color=green!20,label=$6$, font=\scriptsize, very thick, scale=.5](Sdrugb) at (3,0) {};
+\node[below right of=drugb, isosceles triangle, rotate=180, draw, align=center, top color=white, 
+  bottom color=green!20,label={[label distance=-0.7cm]:$7$}, font=\scriptsize, very thick, scale=.5](Fdrugb) at (3,0) {};
+
+\draw[black,thick] (root) to ["{\myred\scriptsize$v_3$}"] (drugb) node[above, font=\fontsize{6}{6}\selectfont, xshift=-1cm, yshift=-0.5cm] {Drug B};
+\draw[black,thick] (root) to [bend left=20, "{\myred\scriptsize$v_2$}"] (druga) node[above, font=\fontsize{6}{6}\selectfont, xshift=-1cm] {Drug A};
+\draw[black,thick] (root) to [bend right=20, "{\myred\scriptsize$v_8$}"] (none) node[above, font=\fontsize{6}{6}\selectfont, xshift=-1cm, yshift=-0.25cm] {No Drug};
+\draw[black,thick] (druga) to [bend left=35, "{\vspace*{-0.1cm}\myred\scriptsize$v_4$\;\myblue$(p_4)$}"] (Sdruga) node[above, font=\fontsize{6}{6}\selectfont, xshift=-0.5cm, yshift=-0.55cm] {Success};
+\draw[black,thick] (druga) to [bend right=35, "{\hspace*{-0.55cm}\myred\scriptsize$v_5$\;\myblue$(p_5)$}"] (Fdruga) node[above, font=\fontsize{6}{6}\selectfont, xshift=-0.5cm, yshift=-0.55cm] {Failure};
+\draw[black,thick] (drugb) to [bend left=35, "{\vspace*{-0.1cm}\myred\scriptsize$v_6$\;\myblue$(p_6)$}"] (Sdrugb) node[above, font=\fontsize{6}{6}\selectfont, xshift=-0.35cm, yshift=-0.45cm] {Success};
+\draw[black,thick] (drugb) to [bend right=35, "{\hspace*{-0.35cm}\myred\scriptsize$v_7$\;\myblue$(p_7)$}"] (Fdrugb) node[above, font=\fontsize{6}{6}\selectfont, xshift=-0.35cm, yshift=-0.4cm] {Failure};
+
+\end{tikzpicture}
+}
+\end{center}
+```
+
+
+## Decision Trees
+
+- Decision trees are used due to their \myblue\textbf{simplicity} \black to:
+
+  + Describe disease natural history and treatment outcomes 
+  + Quantify the \myred \textbf{risks}\black/\myblue\text{payoffs} \black associated with different courses of action
+  + Show alternative clinical pathways where \olive \textbf{discrete decisions} \black and related \textbf{payoffs} occur in sequence in short time frames
+
+. . .
+
+- But they have quite a few \myred \textbf{limitations} \black:
+
+  + Not suited for simulations with large gaps between \myblue \textbf{decisions} \black and \myblue \textbf{realisation} \black of the payoffs
+  + Influence of \olive \textbf{time} \black cannot be easily incorporated
+  + Difficult to incorporate the \olive \textbf{chance of returning} \black to past nodes (eg recovery from illness) 
+
+
+## Decision Trees - computation
+
+- Calculation of expected \myred \textbf{costs}\black/\myblue\textbf{benefits} \black values of *terminal nodes* based on \myblue $p(x_j\mid x_i)$ \black
+
+- Think of a unique pathway from root (\myred $x_{[1]}$ \black) until terminal node (\olive $x_{[n]}$ \black)
+
+. . .
+
+- Chaining \myblue $p(x_j\mid x_i)$ \black for a given pathway gives the \textbf{joint probability} of reaching the terminal node
+
+\scriptsize
+$$
+p(x_{[1]},\ldots,x_{[n]})=p(x_{[2]}\mid x_{[1]}) \times \cdots \times p(x_{[n]}\mid x_{[n-1]})=\prod_{i=1}^{n-1}p(x_{[i+1]}\mid x_{[i]})
+$$
+\normalsize
+
+- Associated \myred \textbf{costs}\black/\myblue\textbf{benefits} \black values are the respective sets of payoffs \mypurple $v=(v_{[1]}=(\color{myred}{c_{[1]}}\color{mypurple}{,}\color{myblue}{e_{[1]}}\color{mypurple}{)},\ldots,v_{[n]}=(\color{myred}{c_{[n]}}\color{mypurple}{,}\color{myblue}{e_{[n]}}\color{mypurple}{)})$ \black
+
+
+## Decision Trees - computation
+
+- \textbf{Backwards computation}
+
+  + weighted average of the **total values** of the successive (\myred \textbf{child}\black) nodes of a given past (\myblue \textbf{parent}\black) node
+  + **weights** = probability to go through each branch to the \myred \textbf{child} \black nodes
+  + starting at the \olive \textbf{terminal nodes} \black the expected values at each \myblue \textbf{chance node} \black is calculated in turn all the way back to the \myred \textbf{decision node} \black
+
+. . .
+
+- \textbf{Forward computation}
+
+  + calculate **total values** and **joint probabilities** along all of the distinct pathways of the tree corresponding to a decision
+  + weighted average of values \& probabilities gives the expected value at the \myred \textbf{decision node} \black  
+
+. . .
+
+- Expected outcomes often expressed in terms of **incremental means** between two competing treatments for some 
+
+  + \myblue \textbf{benefit measure} \black (eg QALYs) $\Delta_e=\text{E}[e\mid \text{trt}_2]-\text{E}[e\mid \text{trt}_1]$
+  + \myred \textbf{costs} \black $\Delta_c=\text{E}[c\mid \text{trt}_2]-\text{E}[c\mid \text{trt}_1]$
+
+## Decision Trees - forward computation
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#trt names and number
+trt_names <- c("Trt1","Trt2")
+n_trt <- length(trt_names)
+#objects to contain outcomes and probabilities
+c_success <- c_fail <- setNames(rep(NA, n_trt), trt_names)
+e_success <- e_fail <- setNames(rep(NA, n_trt), trt_names)
+p_success <- p_fail <- setNames(rep(NA, n_trt), trt_names)
+
+
+#assign values to each state and trt group
+
+#QALYs
+e_success["Trt1"] <- 35
+e_fail["Trt1"] <- 15
+e_success["Trt2"] <- 26
+e_fail["Trt2"] <- 22
+#Costs
+c_success["Trt1"] <- 15000
+c_fail["Trt1"] <- 35000
+c_success["Trt2"] <- 7000
+c_fail["Trt2"] <- 13000
+#for costs also add some initial costs
+c_init <- c("Trt1"=3000, "Trt2"=500)
+#probs
+p_success["Trt1"] <- 0.75
+p_fail["Trt1"] <- 1 - p_success["Trt1"] #events are mutually exclusive
+p_success["Trt2"] <- 0.93
+p_fail["Trt2"] <- 1 - p_success["Trt2"] #events are mutually exclusive
+
+#create empty objects to contain total outcomes
+c_tot <- e_tot <- setNames(rep(NA, n_trt), trt_names)
+c_delta <- e_delta <- setNames(rep(NA, n_trt), trt_names)
+
+#compute path joint probabilities
+p_star <- rbind(p_success,p_fail)
+#path total costs
+c_star <- cbind(c_init + c_success + c_fail)
+#path total QALYs
+e_star <- cbind(e_success + e_fail)
+
+#for total costs c_init not in brackets since they apply to both pathways
+c_tot <- c_init + (p_success*c_success + p_fail*c_fail)
+e_tot <- (p_success*e_success + p_fail*e_fail)
+#incrementals
+c_delta <- c_tot["Trt1"]-c_tot["Trt2"]
+e_delta <- e_tot["Trt1"]-e_tot["Trt2"]
+
+k <- 20000 #wtp (costs per QALY gained)
+icer <- c_delta/e_delta
+inmb <- e_delta*k - c_delta
+```
+
+- Assign \mypurple \textbf{values} \black to each terminal node \black \myred \mypurple $v_j=(\color{myblue}{e_j}\color{mypurple}{,}\color{myred}{c_j}\color{mypurple}{)}$ \black
+
+  + $\text{trt}=1$: $e_j=(e_{\text{S}}=35,e_{\text{F}}=15)$, $c_j=(c_{\text{S}}=15000,c_{\text{F}}=35000)$
+  + $\text{trt}=2$: $e_j=(e_{\text{S}}=26,e_{\text{F}}=22)$, $c_j=(c_{\text{S}}=7000,c_{\text{F}}=13000)$  
+  
+- Often add some path-specific \myred\textbf{initial costs} \black 
+
+  + $\text{trt}=1$: $c_{0}=3000$
+  + $\text{trt}=2$: $c_{0}=500$
+
+- Assign probabilities to each \myblue\textbf{chance node} $p_j$ \black
+
+  + $\text{trt}=1$: $p_j=(p_{\text{S}}=0.75,p_{\text{F}}=0.25)$
+  + $\text{trt}=2$: $p_j=(p_{\text{S}}=0.93,p_{\text{F}}=0.07)$
+
+
+## Decision Trees - forward computation
+
+- Calculate \mypurple\textbf{total values} \mypurple $v^\star_j=(\color{myblue}{e^\star_j}\color{mypurple}{,}\color{myred}{c^\star_j}\color{mypurple}{)}$ \black for each path:
+
+  + $\text{trt}=1$: $e^\star_j=(e_{\text{S}}+e_{\text{F}})$, $c^\star_j=(c_0+c_{\text{S}}+c_{\text{F}})$
+  + $\text{trt}=2$: $e^\star_j=(e_{\text{S}}+e_{\text{F}})$, $c^\star_j=(c_0+c_{\text{S}}+c_{\text{F}})$
+
+- Calculate \myblue\textbf{joint probabilities} \myblue $p^\star_j$ \black for each path
+
+  + $\text{trt}=1$: $p^\star_j=(p_{\text{S}},p_{\text{F}})$
+  + $\text{trt}=2$: $p^\star_j=(p_{\text{S}},p_{\text{F}})$
+
+- Calculate \myred\textbf{expected total value} \myred $\text{E}[V]$ \black as weighted average for each outcome and path
+
+$$
+\text{E}[V]=\sum_{j=1}^m \color{mypurple}{v_j^\star}\color{myblue}{p_j^\star}
+$$
+
+## Decision Trees - forward computation
+
+- Compute **incremental** CE quantities using \myred\textbf{expected values}\black:
+
+  + $\Delta_c=\text{E}[c\mid \theta, \text{trt}_2]-\text{E}[c\mid \theta,\text{trt}_1]$
+  + $\Delta_e=\text{E}[e\mid \theta, \text{trt}_2]-\text{E}[e\mid \theta,\text{trt}_1]$
+  + $\text{ICER}=\frac{\Delta_c}{\Delta_e}$
+  + $\text{INMB}=k\times \Delta_e - \Delta_c$ (eg $k=20000$)
+
+. . .
+
+- For instance, in our example:
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#for total costs c_init not in brackets since they apply to both pathways
+c_tot <- c_init + (p_success*c_success + p_fail*c_fail)
+e_tot <- (p_success*e_success + p_fail*e_fail)
+#incrementals
+c_delta <- c_tot["Trt1"]-c_tot["Trt2"]
+e_delta <- e_tot["Trt1"]-e_tot["Trt2"]
+
+k <- 20000 #wtp (costs per QALY gained)
+icer <- c_delta/e_delta
+inmb <- e_delta*k - c_delta
+
+#combine CE results
+res_dt_ce <- data.frame(
+  "Costs"=round(c_tot),
+  "QALYs"=round(e_tot, 3),
+  "Delta_c"=c(NA,round(c_delta)),
+  "Delta_e"=c(NA,round(e_delta, 3)),
+  "ICER"=c(NA,round(icer)),
+  "INMB"=c(NA,round(inmb))
+)
+
+options(knitr.kable.NA = '')
+
+kable(res_dt_ce, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+
+## Decision Trees - sensitivity analysis
+
+- Two main types of \olive \textbf{uncertainty analyses} \black:
+
+  + \textbf{Stochastic}: around a *realisation* at the individual level
+  + \textbf{Parameter}: around model *input parameters*
+
+. . .
+
+- Exploring impact of uncertainty on model results, often called \olive \textbf{sensitivity analysis}\black, which may be:
+
+  + \myred\textbf{Deterministic} \black(DSA): vary parameters *separately* using a *fixed set of values* (eg low/high)
+  + \myblue\textbf{Probabilistic} \black(PSA): vary parameters *jointly* using sampling from *probability distributions*
+
+. . .
+
+- \myblue \textbf{PSA} \black consists in sampling $s=1\ldots,S$ random inputs $\theta(s)$ from a selected distribution $p(\theta)$ to obtain samples of pairs $(\Delta_e(s),\Delta_c(s))$:
+
+  + $\Delta_e(s)=\text{E}[e\mid \theta(s), \text{trt}_2]-\text{E}[e\mid \theta(s),\text{trt}_1]$
+  + $\Delta_c(s)=\text{E}[c\mid \theta(s), \text{trt}_2]-\text{E}[c\mid \theta(s),\text{trt}_1]$
+
+
+## Decision Trees - PSA
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+S <- 600 #set total number of simulations
+
+#generate initial cost samples for each treatment
+c_init_psa <- rbind(
+  #choice of Gamma parameters here made to obtain distribution centred around means used before
+  #in practice these values need to be defined based on the context
+  "Trt1" = rgamma(n=S, shape = c_init["Trt1"]/500, scale = 500),
+  "Trt2" = rgamma(n=S, shape = c_init["Trt2"]/670, scale = 670)
+)
+
+c_success_psa <- rbind(
+  "Trt1" = rgamma(n=S, shape = c_success["Trt1"]/100, scale = 100),
+  "Trt2" = rgamma(n=S, shape = c_success["Trt2"]/60, scale = 60)
+)
+
+c_fail_psa <- rbind(
+  "Trt1" = rgamma(n=S, shape = c_fail["Trt1"]/200, scale = 200),
+  "Trt2" = rgamma(n=S, shape = c_fail["Trt2"]/110, scale = 110)
+)
+
+e_success_psa <- rbind(
+  "Trt1" = rgamma(n=S, shape = e_success["Trt1"]/0.3, scale = 0.3),
+  "Trt2" = rgamma(n=S, shape = e_success["Trt2"]/0.37, scale = 0.37)
+)
+
+e_fail_psa <- rbind(
+  "Trt1" = rgamma(n=S, shape = e_fail["Trt1"]/0.6, scale = 0.6),
+  "Trt2" = rgamma(n=S, shape = e_fail["Trt2"]/0.4, scale = 0.4)
+)
+
+#for total costs c_init not in brackets since they apply to both pathways
+c_tot_psa <- c_init_psa + (p_success*c_success_psa + p_fail*c_fail_psa)
+e_tot_psa <- (p_success*e_success_psa + p_fail*e_fail_psa)
+#incrementals
+c_delta_psa <- c_tot_psa["Trt1",]-c_tot_psa["Trt2",]
+e_delta_psa <- e_tot_psa["Trt1",]-e_tot_psa["Trt2",]
+
+icer_psa <- mean(c_delta_psa)/mean(e_delta_psa)
+inmb_psa <- mean(e_delta_psa)*k - mean(c_delta_psa)
+
+
+#combine CE results and show average results across samples
+total_c_psa_avg <- apply(c_tot_psa, 1, mean)
+total_e_psa_avg <- apply(e_tot_psa, 1, mean)
+delta_c_psa_avg <- mean(c_delta_psa)
+delta_e_psa_avg <- mean(e_delta_psa)
+inmb_psa_avg <- inmb_psa
+icer_psa <- delta_c_psa_avg/delta_e_psa_avg
+
+res_ce_psa <- data.frame(
+  "Costs"=round(total_c_psa_avg),
+  "QALYs"=round(total_e_psa_avg, 3),
+  "Delta_c"=c(NA,round(delta_c_psa_avg)),
+  "Delta_e"=c(NA,round(delta_e_psa_avg, 3)),
+  "ICER"=c(NA,round(icer_psa)),
+  "INMB"=c(NA,round(inmb_psa_avg))
+)
+```
+
+- For example, we may generate $S$ values for \myred $c_0$ \black for each treatment by sampling them from *Gamma distributions*, indexed by some *shape* and *scale* parameter values, chosen based on the \olive\textbf{context} \black to generate reasonable outcome values:
+
+  + $c_0(s) \mid \text{trt}_1 \sim \text{Gamma}(\text{shape}=c_0/500,\text{scale}=500)$
+  + $c_0(s) \mid \text{trt}_2 \sim \text{Gamma}(\text{shape}=c_0/670,\text{scale}=670)$
+
+. . .
+
+- Use similar approach for other parameters, eg \myblue\textbf{QALYs} \black \& \myred \textbf{costs} \black:
+
+  + $c_{S}(s) \mid \text{trt}_j \sim \text{Gamma}(c_{S}/100,100)$
+  + $c_{F}(s) \mid \text{trt}_j \sim \text{Gamma}(c_{F}/200,200)$
+  + $e_{S}(s) \mid \text{trt}_j \sim \text{Gamma}(e_{S}/0.3,0.3)$
+  + $e_{F}(s) \mid \text{trt}_j \sim \text{Gamma}(e_{F}/0.6,0.6)$
+
+. . .
+
+- For simplicity, assume *fixed values* for \myblue\textbf{probabilities} $p_j$ \black
+
+## Decision Trees - CE results in PSA
+
+- \myblue\textbf{PSA} \black gives $S$ different estimates for each derived quantity, eg **incremental differences** $\Delta_c(s)$ and $\Delta_e(s)$
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+ec_delta_psa <- cbind.data.frame(c_delta_psa,e_delta_psa)
+ec_delta_psa <- head(ec_delta_psa)
+names(ec_delta_psa) <- c("Delta_c","Delta_e")
+kable(ec_delta_psa, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+. . .
+
+- Can summarise these by looking at average values across the $S$ samples and use them to compute **CE measures**, eg $\text{ICER}=\frac{\text{E}_s[\Delta_c(s)]}{\text{E}_s[\Delta_e(s)]}$
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+kable(res_ce_psa, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+## Decision Trees - CE results in PSA
+
+- Or use all $S$ samples to generate **CE graphs**, eg CE plane and CEAC
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| layout-ncol: 2
+
+library(BCEA) #load package
+#generate CE output (also for multiple interventions with ref=assumed comparator)
+ce_dt_bcea <- bcea(eff = t(e_tot_psa), cost = t(c_tot_psa), ref = 1, interventions = trt_names)
+
+#scatter plot of delta_e and delta_c with assumed value k for wtp
+#points in shaded area  / total points = prob of cost-effectiveness at k
+ceplane.plot(ce_dt_bcea, wtp = 20000)
+
+#prob of cost-effectiveness for a range of wtp values
+ceac.plot(ce_dt_bcea)
+```
+
+## Decision Trees - conclusions
+
+- Not appropriate where the disease exhibits \myred \textbf{long latencies} \black intervention or \myred \textbf{multiple interventions} \black over extended times
+
+  + influence of \olive\textbf{time} \black not well represented
+  + movements \olive\textbf{"back and forth"} \black not allowed
+
+. . .
+
+- Structure could be extended to account for these events (eg disease recurrence) **BUT**:
+
+  + as complexity increases, modelling becomes \myred \textbf{inefficient} \black
+  + interpretation of the results becomes \myred \textbf{more challenging} \black
+
+. . .
+
+- Suited for modelling \myblue \textbf{diagnostic technologies} \black and \myblue \textbf{screening programmes} \black (eg false positives, true positives, etc.)
+
+  + \olive \textbf{time dependency} \black and \olive \textbf{long-term} \black disease processes or outcomes *not relevant*
+
+## Markov Models
+
+- Alternative to decision trees for simulating diseases/treatments with \olive \textbf{long-term} \black consequences and \olive \textbf{repeating} \black events
+
+  + simulate nature of disease progression through \olive \textbf{health states} \black 
+  + estimate expected \myred \textbf{costs}\black/\myblue\textbf{benefits} \black associated with each state
+  + states are **mutually exclusive** and **exhaustive**
+  + represented through **state-transition** (S-T) diagrams 
+
+. . .
+  
+- **Example**: colon cancer
+
+  + Three \olive \textbf{treatments}\black: *No trt* (None), *trt A* (A), *trt AB* (AB)
+  + Four \olive \textbf{states}\black: *Recurrence-free* (RF), *Recurrence* (R), *Dead-all cause* (OCD), *Dead-cancer* (CD)
+  + \olive \textbf{Transitions} \black allowed: 
+    + \small $RF\rightarrow (R,OCD)$; $R\rightarrow (OCD,CD)$; $RF\rightarrow (R,OCD,CD)$ \normalsize
+  + model is **irreversible** (back-movement not allowed) 
+  + Death states are **absorbing** (capture final movement)
+
+## Markov Models - example
+
+- **S-T Diagram**: *states* = squares; *transitions* = arrows
+
+```{=latex}
+\begin{center}
+\vspace*{-0.5cm}
+\scalebox{0.7}{
+\begin{tikzpicture}
+\node[rectangle, draw, align=center, top color=white, 
+bottom color=blue!20, font=\small, minimum height=1cm, minimum width=1cm, very thick](RF) at (-0.3,0) {Recurrence-free (RF)};
+\node[below right of=RF, rectangle, draw, align=center, top color=white, 
+bottom color=red!20, font=\small, minimum height=1cm, minimum width=1cm, very thick](CD) at (4.5,-2.5) {Dead-cancer (CD)};
+\node[below left of=RF, rectangle, draw, align=center, top color=white, 
+bottom color=blue!20, font=\small, minimum height=1cm, minimum width=1cm, very thick](R) at (-4.5,-2.5) {Recurrence (R)};
+\node[below of=RF, rectangle, draw, align=center, top color=white, 
+bottom color=red!20, font=\small, minimum height=1cm, minimum width=1cm, very thick](OCD) at (-0.3,-6.5) {Dead-all-cause (OCD)};
+
+
+\draw[->,>=latex,shorten >=0pt, black,very thick] (RF) edge [min distance=20mm, in=30, out=0,looseness=6, "{\scriptsize$X_1$}"] (RF);
+\draw[->,>=latex,shorten >=0pt, black,very thick] (CD) edge [min distance=20mm, in=30, out=0,looseness=6, "{\scriptsize$X_8$}"] (CD);
+\draw[->,>=latex,shorten >=0pt, black,very thick] (R) edge [min distance=20mm, in=150, out=180,looseness=6, "{\scriptsize$X_4$}"] (R);
+\draw[->,>=latex,shorten >=0pt, black,very thick] (OCD) edge [min distance=20mm, in=30, out=0,looseness=6, "{\scriptsize$X_7$}"] (OCD);
+
+\draw[->,>=latex,shorten >=0pt, black,thick] (RF) to ["{\scriptsize$X_2$}"] (R);
+\draw[->,>=latex,shorten >=0pt, black,thick] (RF) to ["{\scriptsize$X_3$}"] (OCD);
+\draw[->,>=latex,shorten >=0pt, black,thick] (R) to ["{\scriptsize$X_5$}"] (OCD);
+\draw[->,>=latex,shorten >=0pt, black,thick] (R) to ["{\scriptsize$\;\;\;X_6$}"] (CD);
+
+\end{tikzpicture}
+}
+\end{center}
+```
+
+## Markov Models - transition probabilities
+
+- Need to define values of \myred \textbf{transition probabilities}\black:
+
+  + Chance of individuals to move between states alongside allowed paths
+  + Organised in \myred \textbf{transition matrices}\black
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+library(kableExtra)
+tm <- matrix(c("X1", 0, 0, 0,
+               "X2", "X4", 0, 0,
+               "X3", "X5", "X7", 0,
+                0, "X6", 0, "X8"), nrow = 4, ncol = 4)
+rownames(tm) <- c("RF","R","OCD","CD")
+colnames(tm) <- c("RF","R","OCD","CD")
+kable(tm, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+. . .
+ 
+- Distinction made between two state-transition model **types**:
+
+  + \myred \textbf{discrete}\black: transitions at a given time point (eg monthly)
+  + \myblue \textbf{continuous}\black: transitions at any time along an interval
+
+## Markov Models - discrete time
+
+- \myred\textbf{Discrete} \black time points often called \olive \textbf{cycles}\black:
+
+  + Their **length** (duration) is chosen according to nature of disease/intervention
+  + If short enough given the context $\rightarrow$ discretisation bias acceptable
+  + balance between \myred \textbf{short length} \black and \myblue\textbf{data availability} \black for probabilities
+
+. . .
+
+- At each cycle individuals in a state may **move** to other states:
+
+  + According to values of \myred\textbf{transition probabilities}\black
+  + Repeated for a number of cycles $T$ - \olive \textbf{time horizon} \black of the model
+  + Often $T=$ entire \olive\textbf{lifetime horizon} \black of the individuals 
+
+. . .
+
+- Probabilities often chosen from the \olive\textbf{literature} \black or estimated from \olive\textbf{data} \black
+
+  + \myred\textbf{Problem}\black: May not be available for a given cycle length
+  + \myblue\textbf{Solution}\black: Transform probabilities between different time frames
+
+## Markov Models - converting probabilities
+
+- A $5$-month \myred\textbf{transition probability} \black $p(t=5)$ available but: 
+
+  + model has cycle length of $t=1$ month
+  + cannot simply divide \myred\textbf{probabilities}\black
+
+. . .
+
+- Convert $p(t)$ into a \myblue\textbf{rate} \black $r(t)$ for desired $t$:
+
+  + $r(t)=$ *instantaneous* measure of change over given time frame $t$
+  + Get $r(t=1) = -\frac{\log(1-p(t=5))}{5}$ over re-scaled time $t=1$
+  + Assume **constant rate over time** for two events
+
+. . .
+
+- Convert $r(t)$ back to a \myred\textbf{probability} \black $p(t)$ 
+
+  + $p(t)$ transformed probability at given time point $t$
+  + Get $p(t=1) = 1-e^{-r(t=1)\times 1}$ at re-scaled time $t=1$
+
+
+## Markov Models - converting probabilities
+
+- Often published data in the form of \olive\textbf{odds}\black:
+
+  + $\text{odds}=\frac{p}{(1-p)}$ 
+  + ratio of event \myblue\textbf{probability} $p$ \black over its complement
+
+. . .
+
+- Or in the form of \olive\textbf{odds ratios}\black:
+
+  + $\text{OR}=\frac{p_1/(1-p_1)}{p_2/(1-p_2)}$
+  + ratio of \olive\textbf{odds} \black for two event probabilities (eg success probability of two competing treatments)
+
+. . .
+
+- Can convert *log(odds)* to $p$ scale using the **inverse logistic** function:
+
+  + $p=\frac{e^{\log(\text{odds})}}{1+e^{\log(\text{odds})}}$
+
+- Can convert $p$ to *log(odds)* scale using the **logistic** function:
+
+  + $\log(\text{odds}) = \log(p/(1-p))$
+
+## Markov Models - Markov assumption
+
+- **Markov Assumption**: movement from current state to a future one, \myblue\textbf{conditional} \black on both *past* and *present* states, \myred\textbf{depends only} \black on the *current* state and not on the *past* states
+
+. . .
+
+- Some models can relax this assumption (**Semi-Markov**) by allowing transitions to also depend on the \olive \textbf{time spent} \black in *current* state 
+
+. . .
+
+- Both model types can be implemented either at:
+
+  + \myred\textbf{Cohort level}\black: simulate a closed *homogeneous* group of individuals
+  + \myblue\textbf{Individual level}\black: simulate single, possibly *heterogeneous*, individuals
+
+. . .
+
+- Here, we focus on two types of \myred\textbf{cohort} \black Markov models:
+
+  + \myred\textbf{time-homogeneous}\black: transition probabilities *constant* over cycles
+  + \myblue\textbf{time-inhomogeneous}\black: transition probabilities *may change* over cycles
+
+
+## Markov Models - Time-Homogeneous
+
+- Consider our colon cancer example:
+
+  + \myred\textbf{Transition matrix} \black has dimensions $4 \times 4$ (four states)
+  + Rows must sum up to $1$ (*mutually exclusive and exhaustive*)
+  + **Zeros** indicate movements between states not allowed
+  
+- \myred\textbf{Transition matrix}\black, eg for the "no treatment" group (None):
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+n_trt <- 3 #n of treatments
+trt_names <- c("None","A","AB") #names of treatments
+n_state <- 4 #n of health states
+state_names <- c("Recurrence-free","Recurrence",
+                 "Dead(all cause)","Dead(cancer)") #names of states
+#create empty trans matrix objects for each treatment option  (homogeneous model)
+trans_matrix_homo <- array(
+  dim = c(n_trt, n_state, n_state), #dimensions (3 x 4 x 4)
+  dimnames = list(trt_names, state_names, state_names) #names of each dimension
+)
+#probs for None from Recur-free to each of the 4 model states (itself, Recur, dead-all,dead-cancer)
+trans_matrix_homo["None", "Recurrence-free", ] <- c(NA, 0.063, 0.12, 0)
+#probs for None from Recur to each of the 4 model states (Recur-free,itself, dead-all,dead-cancer)
+trans_matrix_homo["None", "Recurrence", ] <- c(0, NA, 0.12, 0.43)
+#probs for None from Dead-all to each of the 4 model states (Recur-free,Recur, itself,dead-cancer)
+trans_matrix_homo["None", "Dead(all cause)", ] <- c(0, 0, NA, 0)
+#probs for None from Dead-cancer to each of the 4 model states (Recur-free,Recur, dead-all,itself)
+trans_matrix_homo["None", "Dead(cancer)", ] <- c(0, 0, 0, NA)
+
+#do the same for Trt A
+trans_matrix_homo["A", "Recurrence-free", ] <- c(NA, 0.068, 0.12, 0)
+trans_matrix_homo["A", "Recurrence", ] <- c(0, NA, 0.12, 0.39)
+trans_matrix_homo["A", "Dead(all cause)", ] <- c(0, 0, NA, 0)
+trans_matrix_homo["A", "Dead(cancer)", ] <- c(0, 0, 0, NA)
+
+#do the same for Trt AB
+trans_matrix_homo["AB", "Recurrence-free", ] <- c(NA, 0.048, 0.12, 0)
+trans_matrix_homo["AB", "Recurrence", ] <- c(0, NA, 0.12, 0.27)
+trans_matrix_homo["AB", "Dead(all cause)", ] <- c(0, 0, NA, 0)
+trans_matrix_homo["AB", "Dead(cancer)", ] <- c(0, 0, 0, NA)
+
+#ensure row sum up to 1
+#fill in NAs (prob of remaining in state) as 1 - sum of probs on the same row for same treatment option
+for(i in 1:length(state_names)){
+  trans_matrix_homo[, i, i] <- 1 - rowSums(trans_matrix_homo[, i, -i])
+}
+
+tm_none <- trans_matrix_homo["None",,]
+
+kable(tm_none, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+## Markov Models - Time-Homogeneous
+
+- The \myred\textbf{Markov trace} \black $\pi_t$ gives information about how the cohort is *proportionally distributed* across the states at each cycle $t$
+
+. . .
+
+- In our example, at $t=1$:
+
+  + Everyone starts in RF state and no one in the other states
+  + $\pi_1$ shows that $100\%$ of the cohort is in RF and $0\%$ in all the others
+
+. . .
+
+- At $t=2,\ldots,T$, individuals transition to other states:
+
+  + $\pi_{t+1}$ computed using \myred\textbf{transition matrix} \black $P$: $\pi_{t+1}=\pi_tP$
+  + obtain distribution of individuals transitioning from their *current* state to *other* states at $t+1$ 
+  + check model behaviour compared to \olive\textbf{expected clinical context}\black
+
+
+## Markov Models - Time-Homogeneous
+
+- The \myred\textbf{Markov trace} \black $\pi_t$ gives information about how the cohort is proportionally distributed across the states at each cycle $t$
+
+- For instance, we can look at $\pi_{t}$ at $t=\{1,2,3,4,5\}$ (eg for None):
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#proportion in each state at cycle 1 for a given trt (eg None)
+pcohort_first <- c(1, 0, 0, 0) 
+#compute updated proportion at cycle 2 in same trt
+pcohort_second <- pcohort_first %*% trans_matrix_homo["None", ,]
+#compute updated proportion at cycle 3 in same trt
+pcohort_third <- pcohort_second %*% trans_matrix_homo["None", ,] 
+#etc... for successive cycles
+pcohort_fourth <- pcohort_third %*% trans_matrix_homo["None", ,] 
+#etc... for successive cycles
+pcohort_fifth <- pcohort_fourth %*% trans_matrix_homo["None", ,] 
+#etc... for successive cycles
+
+mt_ex <- rbind.data.frame(pcohort_first,pcohort_second,pcohort_third,pcohort_fourth,pcohort_fifth)
+
+kable(mt_ex, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+n_cycle <- 50
+#assign cycle names (from 0 up to n_cycle)
+cycle_names <- paste("Cycle", 0:(n_cycle-1), sep = " ")
+#zero-filled array 
+Mtrace_homo <- array(
+  0, dim = c(n_trt, n_cycle, n_state), #n trt x n cycles x n states
+  dimnames = list(trt_names, cycle_names, state_names) #assign names to each dimension
+)
+
+#all individuals start in cycle 0 in Recurrence-free state
+Mtrace_homo[, 1, "Recurrence-free"] <- 1
+
+#calculate trace entries at each cycle for each trt and state by looping product between trans matrix and value of trace at each cycle over cycles and trts
+for(i_cycle in 1:(n_cycle-1)){
+  for(i_trt in 1:n_trt){
+    Mtrace_homo[i_trt, i_cycle+1, ] <- Mtrace_homo[i_trt, i_cycle, ] %*% trans_matrix_homo[i_trt, , ]
+  }
+}
+```
+
+## Markov Models - costs
+
+- Treatment-specific \myred\textbf{costs} \black often simulated by associating them with each \myblue\textbf{state} \black rather than \myred\textbf{transitions}\black
+
+. . .
+
+- In our case, cost of a *recurrence* (eg $35000$) not straightforward to incorporate:
+
+  + associate cost of a recurrence to \myblue\textbf{Recurrence-Free} \black state $c_{RF}=35000$ 
+  + weight it by the \olive\textbf{probability of a recurrence} \black $c^\star_{RF}=35000\times p_{RF-R}$ 
+  + to calculate the \myred\textbf{average cost} \black of recurrence events
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#create zero-filled array for containing costs for each state and treatment
+state_c <- array(0, dim=c(n_trt, n_state),
+                 dimnames = list(trt_names, state_names))
+#set costs for recurrence-free state as cost of recurrence weighted by prob of recurrence from trans matrix for each treatment
+state_c[, "Recurrence-free"] <- trans_matrix_homo[, "Recurrence-free", "Recurrence"] * 35000
+#set other costs to zero
+state_c[, "Recurrence"] <- 0
+state_c[, "Dead(all cause)"] <- 0
+state_c[, "Dead(cancer)"] <- 0
+
+kable(state_c, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+## Markov Models - utilities
+
+- State-specific \myblue\textbf{utilities} \black $u_{s}$ multiplied by the \olive\textbf{cycle length}\black
+
+  + to get associated \myblue\textbf{QALYs} \black accrued from spending one cycle in each state
+  + when \olive\textbf{cycle length} \black is one year, cycle \myblue\textbf{utilities} \black and \myblue\textbf{QALYs} \black coincide
+  + often assumed to be the same across treatments
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#create NA-filled array for containing utilities for each state
+state_e <- array(, dim=c(n_state), dimnames = list(state_names))
+#set utilities for all states
+state_e["Recurrence-free"] <- 0.8
+state_e["Recurrence"] <- 0.6
+state_e["Dead(all cause)"] <- 0
+state_e["Dead(cancer)"] <- 0
+
+kable(state_e, booktabs = TRUE, row.names = TRUE ,digits = 3, col.names = NULL) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 10, latex_options = "scale_down")
+```
+
+## Markov Models - costs and utility losses
+
+- If applicable, the impact on \myred\textbf{costs} \black and \myblue\textbf{utilities} \black of relevant **events** (eg due to *toxicity*) can be taken into account based on:
+
+  + toxicity \myred\textbf{costs} \black $c_{\text{tox}}=2000$ 
+  + toxicity \myblue\textbf{disutilities} \black $u_{\text{tox}}=-0.1$
+  + toxicity \olive\textbf{probabilities} \black $p_{\text{tox},\text{trt}}$
+
+- These can be added to the totals to compute treatment-specific average \myred\textbf{costs} \black and \myblue\textbf{disutilities}\black: 
+
+  + $c_{\text{trt}}=c_{0,\text{trt}} + c_{\text{tox}}\times p_{\text{tox},\text{trt}}$
+  + $u_{\text{trt}}=u_{\text{tox}}\times p_{\text{tox},\text{trt}}$
+  
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#prob of toxicity on each trt
+p_tox_A <- 0.2
+p_tox_AB <- 0.4
+cost_tox <- 2000
+disu_tox <- -0.1
+
+#empty objects to contain costs and QALYs by trt
+trt_cost <- array(dim=c(n_trt), dimnames = list(trt_names))
+trt_qaly <- array(dim=c(n_trt), dimnames = list(trt_names))
+#assign costs by trt
+trt_cost["None"] <- 0
+trt_cost["A"] <- 5000 + p_tox_A*cost_tox
+trt_cost["AB"] <- 10000 + p_tox_AB*cost_tox
+#assign qalys by trt
+trt_qaly["None"] <- 0
+trt_qaly["A"] <- p_tox_A*disu_tox
+trt_qaly["AB"] <- p_tox_AB*disu_tox
+
+tox_v <- rbind.data.frame(trt_cost, trt_qaly)
+rownames(tox_v) <- c("Costs","QALYs")
+colnames(tox_v) <- c("None","A","AB")
+
+kable(tox_v, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+
+## Markov Models - discounting
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#set annual discount factor
+disc_c <- 0.03 #3% for costs
+disc_e <- 0.015 #1.5% for QALYs
+#generate discounted rates at each cycle over the entire time horizon of the model
+disc_c_seq <- 1/((1+disc_c)^(rep(1:n_cycle)))
+disc_e_seq <- 1/((1+disc_e)^(rep(1:n_cycle)))
+
+#assign memory of costs and QALYs for each trt in each cycle and total costs and QALYs for each trt
+#create empty objects to contain treatment and cycle-specific costs and QALYs computed across states
+cycle_c <- array(
+  dim=c(n_trt, n_cycle),
+  dimnames = list(trt_names, cycle_names)
+)
+cycle_e <- array(
+  dim=c(n_trt, n_cycle),
+  dimnames = list(trt_names, cycle_names)
+)
+#create empty objects to contain treatment specific costs and QALYs computed across states and cycles
+total_c <- array(
+  dim=c(n_trt),
+  dimnames = list(trt_names)
+)
+total_e <- array(
+  dim=c(n_trt),
+  dimnames = list(trt_names)
+)
+
+#fill-in the above objects with cost and QALY values generated using the Markov trace of the model
+for(i_trt in 1:n_trt){#repeat computation for each trt
+  #costs depend on trt as they depend on risk of recurrence which differs by trt
+  cycle_c[i_trt,] <- Mtrace_homo[i_trt, , ] %*% state_c[i_trt, ]
+  #QALYs do not depend on trt 
+  cycle_e[i_trt,] <- Mtrace_homo[i_trt, , ] %*% state_e[]
+  
+  #combine cycle and trt outcomes to obtain total outcomes using discount factor
+  total_c[i_trt] <- trt_cost[i_trt] + cycle_c[i_trt, ] %*% disc_c_seq
+  total_e[i_trt] <- trt_qaly[i_trt] + cycle_e[i_trt, ] %*% disc_e_seq
+}
+
+#compute NMB
+#assume k value of 10000
+v_nmb <- 10000*total_e - total_c
+#create data frame with results
+df_res_ce <- data.frame("Costs"=round(total_c),
+                        "QALYs"=round(total_e,3),
+                        "NMB"=round(v_nmb))
+```
+
+- \olive\textbf{Time horizon}\black, ie number of cycles $T$, goes beyond $1$ year:
+
+  + need to discount total \myred\textbf{costs} \black and \myblue\textbf{QALYs} \black at annual \olive\textbf{discount rate} \black $d$
+  + compute \olive\textbf{discount factor} \black at cycle $t$: $d(t)=\frac{1}{(1+d)^{t}}$
+  + in the Netherlands: $d^c=3\%$ and $d^e=1.5\%$
+
+. . .
+
+- First, multiply cycle-specific proportions in \myred\textbf{Markov trace} \black $\pi_t$ to \myblue\textbf{state-specific outcomes} \black $(c_{RF},u_{s})$ and sum them to obtain total \olive\textbf{cycle-specific values} \black $(c(t),u(t))$ for each treatment
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+kable(cycle_c[, 1:5], booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+
+## Markov Models - compute total costs and QALYs
+
+
+- Then:
+
+  + multiply \olive\textbf{cycle-specific outcomes} \black $(c(t),u(t))$ to \olive\textbf{discount} \black factors $d(t)$ and sum them across cycles
+  + add \myred\textbf{treatment-specific outcomes} \black $(c_{\text{trt}},u_{\text{trt}})$ to obtain **total values** for each treatment $(c_{\text{tot}},u_{\text{tot}})$
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+tot_cu <- rbind.data.frame(total_c,total_e)
+rownames(tot_cu) <- c("Costs","QALYs")
+colnames(tot_cu) <- c("None","A","AB")
+
+kable(tot_cu, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+- Finally, get **incremental** CE quantities for $\text{trt}=(A,AB)$ vs None:
+
+  + Incremental costs: $\Delta_c=c_{\text{tot,trt}}-c_{\text{tot,None}}$
+  + Incremental Effects: $\Delta_e=u_{\text{tot,trt}}-u_{\text{tot,None}}$
+  + Incremental CE Ratio: $\text{ICER}=\frac{\Delta_c}{\Delta_e}$
+  + Incremental NMB: $\text{INMB}=\Delta_e \times k - \Delta_c$ (eg $k=10000$)
+
+## Markov Models - compute total costs and QALYs
+
+
+- Then:
+
+  + multiply \olive\textbf{cycle-specific outcomes} \black $(c(t),u(t))$ to \olive\textbf{discount} \black factors $d(t)$ and sum them across cycles
+  + add \myred\textbf{treatment-specific outcomes} \black $(c_{\text{trt}},u_{\text{trt}})$ to obtain **total values for each treatment** $(c_{\text{tot}},u_{\text{tot}})$
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+tot_cu <- rbind.data.frame(total_c,total_e)
+rownames(tot_cu) <- c("Costs","QALYs")
+colnames(tot_cu) <- c("None","A","AB")
+
+kable(tot_cu, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+- Finally, get **incremental CE quantities** for $\text{trt}=(A,AB)$ vs None:
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#compute incremental outcomes for A or AB vs None
+none_index <- which(names(total_c) == "None")
+delta_c <- total_c[-none_index] - total_c["None"]
+delta_e <- total_e[-none_index] - total_e["None"]
+
+#compute icer for each comparison
+icer <- delta_c/delta_e
+
+#compute incremental NMB for each comparison (assume k=10000)
+inmb <- 10000*delta_e - delta_c
+
+#combine CE results
+res_ce <- data.frame(
+  "Costs"=round(total_c),
+  "QALYs"=round(total_e, 3),
+  "Delta_c"=c(NA,round(delta_c)),
+  "Delta_e"=c(NA,round(delta_e, 3)),
+  "ICER"=c(NA,round(icer)),
+  "NMB"=round(v_nmb),
+  "INMB"=c(NA,round(inmb))
+)
+
+res_ce_inc <- res_ce[,c("Delta_c","Delta_e","ICER","INMB")]
+
+options(knitr.kable.NA = '')
+
+kable(res_ce_inc, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+## Markov Models - Time-Inhomogeneous
+
+- In our case, \myred\textbf{transition probabilities} \black may be \olive\textbf{time-dependent}\black, for example, because:
+
+  + Recurrence probabilities depend on *time since treatment initiation*
+  + All-cause death probabilities depend on *age*
+  + Cancer-death probabilities depend on *time since recurrence*
+
+- Due to \myred\textbf{cohort} \black structure of the model, \olive\textbf{time-dependency}\black:
+
+  + can be recorded in terms of \myblue\textbf{time-in-model} \black - eg, since treatment initiation or age
+  + cannot be recorded in terms of \myred\textbf{time-in-state} \black - eg, since recurrence
+
+- Need to define \myred\textbf{transition matrix} \black where probabilities are defined for each treatment and cycle:
+
+  + \olive\textbf{time-dependency function} \black to say how probabilities change over time
+  + if reasonable, cycle-specific probabilities can be filled-in more easily
+  
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#create zero-filled transition matrices 
+trans_matrices <- array(0,
+  #array of dimensions 3 x 50 x 4 x 4                      
+  dim = c(n_trt, n_cycle, n_state, n_state),
+  #assign name to each dimension
+  dimnames = list(trt_names, cycle_names, state_names, state_names)
+)
+
+library(data.table)
+library(flexsurv)
+
+#function to convert log(odds) to probs
+invlogit <- function(logodds){
+  p <- (exp(logodds)/(1+exp(logodds)))
+  return(p)
+}
+
+#function to convert probs to logodds
+logit <- function(p){
+  logodds <- log(p/(1-p))
+  return(logodds)
+}
+
+#assume to use a Gompertz distribution to describe all-cause mortality time-dependency, with an estimated shape value parameter of 0.0885 and rate value parameter of 0.0081 (assumed constant across treatments)
+shape_death_all <- 0.0885
+rate_death_all <- 0.0081
+
+#define transition probabilities for all-cause death at first cycle using Gompertz cumulative hazard function and express death probability as 1 - survival
+trans_matrices[, 1, "Recurrence-free", "Dead(all cause)"] <- 1 - exp(-Hgompertz(1, shape_death_all, rate = rate_death_all))
+trans_matrices[, 1, "Recurrence", "Dead(all cause)"] <- 1 - exp(-Hgompertz(1, shape_death_all, rate = rate_death_all))
+
+#do the same at successive cycles by looping over them (time incorporated into function as number of cycle will affect the survival probability estimate through the Gompertz function)
+for(i_cycle in 2:n_cycle){
+#ratio of cumulative Gompertz functions gives conditional death prob up to cycle i given death at cycle i-1 (expressed as 1 - survival)
+  trans_matrices[, i_cycle, "Recurrence-free", "Dead(all cause)"] <- 1 - exp(-Hgompertz(i_cycle, shape_death_all, rate = rate_death_all)) / exp(-Hgompertz(i_cycle-1, shape_death_all, rate = rate_death_all))
+  #assume same mortality pattern for Recurrence-free and Recurrence states
+  trans_matrices[, i_cycle, "Recurrence", "Dead(all cause)"] <- 1 - exp(-Hgompertz(i_cycle, shape_death_all, rate = rate_death_all)) / exp(-Hgompertz(i_cycle-1, shape_death_all, rate = rate_death_all))
+}
+
+#use log-logistic mixture cure model to describe transition probability time-dependency between Recurrence-free and Recurrence states, by fixing the estimated parameters of the model separately for each treatment: log-odds of cure, shape and scale parameters
+recurr_mean <- list() #empty list to contain mean parameters from model
+#fill in trt specific model parameter values
+recurr_mean[["None"]] <- c(-0.4398, 0.4597, 0.1379) #log-odds, shape, scale
+recurr_mean[["A"]] <- c(-0.3661, 0.5414, 0.1007) #log-odds, shape, scale
+recurr_mean[["AB"]] <- c(0.2965, 0.5154, 0.2704) #log-odds, shape, scale
+
+#fill in prob values by looping over treatments
+for(tname in trt_names){
+  #name entries in the above-created list
+  names(recurr_mean[[tname]]) <- c("lodds","shape","scale")
+  #fill in prob between Recurrence-free and Recurrence at cycle 1 as product of prob of not being cured (expressed as 1 - prob of being cured) * prob of recurrence (expressed as 1 - prob of no recurrence) based on cumulative hazard function of log-logistic model
+  trans_matrices[tname, 1, "Recurrence-free", "Recurrence"] <- (1 - invlogit(recurr_mean[[tname]]["lodds"])) * 
+    (1 - exp(-Hllogis(1, shape = exp(recurr_mean[[tname]]["shape"]), scale = exp(recurr_mean[[tname]]["scale"]))))
+
+#do the same at successive cycles 
+  for(i_cycle in 2:n_cycle){
+    #assume same prob of not being cured
+  trans_matrices[tname, i_cycle, "Recurrence-free", "Recurrence"] <- (1 - invlogit(recurr_mean[[tname]]["lodds"])) * 
+  #obtain recurrence prob at cycle i conditional on no recurrence at cycle i-1 
+    (1 - exp(-Hllogis(i_cycle, shape = exp(recurr_mean[[tname]]["shape"]), scale = exp(recurr_mean[[tname]]["scale"]))) / 
+       exp(-Hllogis(i_cycle - 1,  shape = exp(recurr_mean[[tname]]["shape"]), scale = exp(recurr_mean[[tname]]["scale"]))))
+  }
+}
+
+#fix estimate from log rate and rate ratios for treatments
+lrate_cdeath_none <- -0.5734 #log rate of mortality for None
+lrate_cdeath_A <- 0.0548 #log rate ratio of mortality for A and AB
+lrate_cdeath_AB <- 0.0548 #log rate ratio of mortality for A and AB
+
+#compute transition probabilities for each treatment between Recurrence and Dead(cancer) by converting log estimates on rate scale to generate treatment-specific but time constant mortality rates (expressed as 1-survival rates)
+trans_matrices["None", , "Recurrence", "Dead(cancer)"] <- 1 - exp(-exp(lrate_cdeath_none))
+trans_matrices["A", , "Recurrence", "Dead(cancer)"] <- 1 - exp(-exp(lrate_cdeath_none + lrate_cdeath_A))
+trans_matrices["AB", , "Recurrence", "Dead(cancer)"] <- 1 - exp(-exp(lrate_cdeath_none + lrate_cdeath_AB))
+
+#make sure rows sum up to 1, ie compute prob of remaining in current state at each cycle as 1 - prob of leaving state (expressed as sum of all other transition prob from that state at each cycle)
+for(i_state in 1:length(state_names)){
+  trans_matrices[, , i_state, i_state] <- 1 - 
+    #sum up probs from each to state to any other state across treatment dimension (index=1) and cycle dimension (index=2) ignoring possible NAs (na.rm=TRUE)
+    apply(trans_matrices[, , i_state, -i_state], c(1,2), sum, na.rm = TRUE) 
+}
+
+```
+
+## Markov Models - time-dependent probabilities
+
+- Probabilities for \myred\textbf{death states} \black estimated via \olive\textbf{survival analysis}\black:
+
+  + Alternative \olive\textbf{survival functions} \black used to express *time-mortality* relation
+  + Fitted to relevant data (eg life tables) and compared using \myblue\textbf{standard measures} \black (eg *Akaike Information Criterion* - AIC)
+  + \olive\textbf{Cumulative hazard function} \black gives probabilities $RF\rightarrow OCD$
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false
+#| out-width: 70%
+#| out-height: 55%
+#| fig-align: center
+
+dat <- data.table(survival::lung)
+dat[, status := ifelse(status == 1, 0, 1)]
+
+library(muhaz)
+kernel_haz_est <- muhaz(dat$time, dat$status)
+kernel_haz <- data.table(time = kernel_haz_est$est.grid,
+                         est = kernel_haz_est$haz.est,
+                         method = "Kernel density")
+
+dists <- c("exp", "weibull", "gompertz", "gamma", 
+           "lognormal", "llogis", "gengamma")
+dists_long <- c("Exponential", "Weibull (AFT)",
+                "Gompertz", "Gamma", "Lognormal", "Log-logistic",
+                "Generalized gamma")
+parametric_haz <- vector(mode = "list", length = length(dists))
+for (i in 1:length(dists)){
+  fit <- flexsurvreg(Surv(time, status) ~ 1, data = dat, dist = dists[i]) 
+  parametric_haz[[i]] <- summary(fit, type = "hazard", 
+                                     ci = FALSE, tidy = TRUE)
+  parametric_haz[[i]]$method <- dists_long[i]
+}
+parametric_haz <- rbindlist(parametric_haz)
+
+haz <- rbind(kernel_haz, parametric_haz)
+haz[, method := factor(method,
+                       levels = c("Kernel density",
+                                  dists_long))]
+n_dists <- length(dists) 
+ggplot(haz, aes(x = time, y = est, col = method, linetype = method)) +
+  geom_line() +
+  xlab("Days") + ylab("Hazard") + 
+  scale_colour_manual(name = "", 
+                      values = c("black", rainbow(n_dists))) +
+  scale_linetype_manual(name = "",
+                        values = c(1, rep_len(2:6, n_dists))) +
+  theme_classic() + 
+  theme(legend.text=element_text(size=14.5))
+```
+
+
+## Markov Models - time-dependent probabilities
+
+- Probabilities for \myblue\textbf{non-death states} \black can be derived similarly using \olive\textbf{probabilistic functions} \black
+
+  + eg, *Log-logistic function* used to estimate probability $RF\rightarrow R$
+  + estimated parameter values used to generate probabilities at each cycle in the model 
+
+. . .
+
+- Probability $R\rightarrow CD$ \olive\textbf{time-independent} \black since model cannot capture \myred\textbf{time-in-state}\black:
+
+  + eg, *Exponential* function parameter estimated from *log rates* and *rate ratios* of treatments
+
+. . .
+
+- Fill-in probabilities in \myred\textbf{transition matrices} \black at each cycle for each treatment
+
+## Markov Models - time-dependent probabilities
+
+- For instance, for "None" treatment at cycle $1$
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+tmih1 <- trans_matrices["None",1,,]
+
+kable(tmih1, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+## Markov Models - time-dependent probabilities
+
+- For instance, for "None" treatment at cycle $2$
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+tmih2 <- trans_matrices["None",2,,]
+
+kable(tmih2, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+
+## Markov Models - time-dependent probabilities
+
+- For instance, for "None" treatment at cycle $3$
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+tmih3 <- trans_matrices["None",3,,]
+
+kable(tmih3, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+## Markov Models - time-dependent Markov trace
+
+- Next, calculate \myred\textbf{Markov trace} \black using *cycle-dependent* \myred\textbf{transition probabilities} \black for each treatment 
+
+- For instance, for "None" treatment at first few cycles
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#create zero-filled markov trace array object
+Mtrace_inhomo <- array(
+  #dimensions of 3 x 50 x 4
+  0, dim = c(n_trt, n_cycle, n_state),
+  #assign names to each dimension
+  dimnames = list(trt_names, cycle_names, state_names)
+)
+
+#set that everyone starts in Recurrence-free at cycle 1 (100% proportions)
+Mtrace_inhomo[, 1, "Recurrence-free"] <- 1
+
+#extract transition probs to fill-in values of trace at each cycle for each treatment
+for(i_cycle in 1:(n_cycle-1)){
+  for(i_trt in 1:n_trt){
+    #loop over cycles and trt and update proportions in each state from trace using probs between each state (matrix product between trace and trans matrix)
+    Mtrace_inhomo[i_trt, i_cycle + 1, ] <- Mtrace_inhomo[i_trt, i_cycle, ] %*%  trans_matrices[i_trt, i_cycle, ,]
+  }
+}
+
+#check first few rows of trace for None treatment
+head_mtih <- head(Mtrace_inhomo["None", ,])
+
+kable(head_mtih, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+
+## Markov Models - costs and utilities
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#create zero-filled array objects to contain state cost values
+state_c <- array(0,
+    dim = c(n_trt, n_cycle, n_state), #dimensions 3 x 50 x 4
+    dimnames = list(trt_names, cycle_names, state_names))
+
+#fill in recurrence costs at each cycle for each treatment using transition matrix probs * assigned costs of recurrence (expressed as unit cost times prob of moving from recurrence-free to recurrence and setting cost of recurrence state to 0) 
+state_c[, , "Recurrence-free"] <- trans_matrices[, , "Recurrence-free", "Recurrence"] * 40000
+state_c[, , "Recurrence"] <- 0
+#set all other death state costs at 0
+state_c[, , "Dead(all cause)"] <- 0
+state_c[, , "Dead(cancer)"] <- 0
+
+#create empty objects to contain memory costs and QALYs for each trt in each cycle across states
+cycle_c <- array(dim = c(n_trt, n_cycle),
+                 dimnames = list(trt_names, cycle_names))
+cycle_e <- array(dim = c(n_trt, n_cycle),
+                 dimnames = list(trt_names, cycle_names))
+
+#create empty objects to contain total costs and QALYs for each trt across cycles and states
+total_c <- array(dim = c(n_trt),
+                 dimnames = list(trt_names))
+total_e <- array(dim = c(n_trt),
+                 dimnames = list(trt_names))
+
+#compute and fill-in the values for the cycle outcomes for each treatment as product between the Markov trace and state outcomes at each cycle 
+for(i_trt in 1:n_trt){
+  #for costs need to take sum of values across states since outer product between matrices will return cycle-specific values for each state due to dependency of state costs on cycle
+  cycle_c[i_trt, ] <- rowSums(Mtrace_inhomo[i_trt, , ] * state_c[i_trt, , ])
+  #for QALYs the matrix (inner) product directly gives the values across states since no dependency on cycles is assumed for this outcome
+  cycle_e[i_trt, ] <- Mtrace_inhomo[i_trt, , ] %*% state_e[]
+  
+#sum over outcomes for each treatment at different cycles to get total outcomes and apply discount factors (for costs also add initial trt costs to each group)
+total_c[i_trt] <- trt_cost[i_trt] + cycle_c[i_trt, ] %*% disc_c_seq
+total_e[i_trt] <- cycle_e[i_trt, ] %*% disc_e_seq
+}
+
+#incremental cost results
+delta_c <- total_c[-none_index] - total_c["None"]
+
+#incremental QALY results
+delta_e <- total_e[-none_index] - total_e["None"]
+
+#icer for each comparison
+icer <- delta_c/delta_e
+
+#nmb for each comparison assuming reference threshold value k=10000
+v_nmb <- 10000*total_e - total_c
+
+#inmb for a k value of 10000
+inmb <- 10000*delta_e - delta_c
+
+#combine CE results
+res_ce <- data.frame(
+  "Costs"=round(total_c),
+  "QALYs"=round(total_e, 3),
+  "Delta_c"=c(NA,round(delta_c)),
+  "Delta_e"=c(NA,round(delta_e, 3)),
+  "ICER"=c(NA,round(icer)),
+  "NMB"=round(v_nmb),
+  "INMB"=c(NA,round(inmb))
+)
+```
+
+- Computation of treatment-specific \myred\textbf{costs} \black and \myblue\textbf{utilities} \black is mostly similar to that of the homogeneous model
+
+. . .
+
+- \myred\textbf{Costs}\black:
+
+  + \myred\textbf{state costs} \black $c_{s}(t)$ time-dependent as from \myred\textbf{transition matrices} \black 
+  + \olive\textbf{cycle costs} \black $c(t)$ computed as product between \myred\textbf{Markov trace} \black $\pi_t$ and $c_{s}(t)$, which are then summed across states at each cycle $t$
+  + \textbf{total costs} computed as product between $c(t)$ and \olive\textbf{discount} \black factors $d^c(t)$, summed across cycles, and then added to \myred\textbf{treatment costs} \black $(c_{\text{trt}})$
+
+. . .
+
+- \myblue\textbf{Utilities}\black:
+
+  + \myblue\textbf{state utilities} \black $u_{s}$ time-independent
+  + \olive\textbf{cycle utilities} \black $u(t)$ computed as product between $\pi_t$ and $u_{s}$ at $t$
+  + \textbf{total utilities} computed as product between $u(t)$ and \olive\textbf{discount} \black factors $d^e(t)$, summed across cycles, and added to \myblue\textbf{treatment disutilties} \black $(u_{\text{trt}})$
+
+
+## Markov Models - CE results
+
+- Total outcome values per treatment and **incremental** CE results can then be computed as per usual
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+kable(res_ce, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+## Markov Models - implementing PSA
+
+- Impact of \myred\textbf{parameter uncertainty} \black must be assessed via **PSA**:
+
+  + introduce *probabilistic modelling* of parameters
+  + generate a "sufficient" number of samples $S$ from distributions
+  + run the model at each parameter sampled values
+  + obtain \myblue\textbf{distributions} \black for CE quantities (eg INMB)
+
+- **Key changes**:
+
+  + include an extra dimension to all model elements (eg \myred\textbf{transition matrices}\black) for the $S$ parameter samples
+  + choose appropriate distributions for most/all model parameters (eg *Gamma* for costs)
+  + if possible, account for the \olive\textbf{correlation} \black between key parameters via \myblue\textbf{joint distributions} \black
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+library(MASS)
+S <- 600 #set number of iterations
+set.seed(4567) #set rng for reproducibility
+#empty array to contain a transition matrix for each trt, cycle and iteration
+#dimensions 3 x 50 x 200 x 4 x 4
+trans_matrices_psa <- array(dim = c(n_trt, n_cycle, S, n_state, n_state),
+#set names of dimensions (no name for iterations)
+    dimnames = list(trt_names, cycle_names, NULL, state_names, state_names))
+
+#recurrence prob assumed to come from log-logistic cure model separately for each trt according to values for log-odds, shape and scale parameters
+#set empty lists to contain values for mean, covariance and sample values for these parameters when sampled jointly
+recurr_mean <- recurr_cov <- recurr_sample <- list()
+#fill in means for each trt using values from single point version of model
+recurr_mean[["None"]] <- c(-0.4398, 0.4597, 0.1379) #log-odds, shape, scale
+recurr_mean[["A"]] <- c(-0.3661, 0.5414, 0.1007) #log-odds, shape, scale
+recurr_mean[["AB"]] <- c(0.2965, 0.5154, 0.2704) #log-odds, shape, scale
+#fill in covariances among parameters for each trt (need to get these values from literature/experts or some reasonable guess)
+#since three parameters are jointly modelled then we need 3*(3-1) = 6 values for their covariance matrix (Var(logodds), Var(shape), Var(scale), Cov(logodds,shape), Cov(logodds,scale), Cov(shape,scale))
+recurr_cov[["None"]] <- matrix(c(0.0185, 0.0035, -0.0037,
+                                 0.0035, 0.0063, -0.0026,
+                                 -0.0037, -0.0026, 0.0089),
+                               nrow = 3, ncol = 3)
+recurr_cov[["A"]] <- matrix(c(0.0165, 0.0025, -0.0021,
+                                 0.0025, 0.0061, -0.0018,
+                                 -0.0021, -0.0018, 0.0071),
+                               nrow = 3, ncol = 3)
+recurr_cov[["AB"]] <- matrix(c(0.0172, 0.0037, -0.0034,
+                                 0.0037, 0.0097, -0.0036,
+                                 -0.0034, -0.0036, 0.0114),
+                               nrow = 3, ncol = 3)
+
+#loop through treaments when sampling these parameter values and store them in empty list
+for(tname in trt_names){#sample S parameter values from multivariate normals
+  recurr_sample[[tname]] <- mvrnorm(S, 
+   mu = recurr_mean[[tname]], Sigma = recurr_cov[[tname]])
+
+#assign list containing the sampled values with names   
+  names(recurr_mean[[tname]]) <- c("lodds","shape","scale")
+  colnames(recurr_cov[[tname]]) <- c("lodds","shape","scale")
+  rownames(recurr_cov[[tname]]) <- c("lodds","shape","scale")
+  colnames(recurr_sample[[tname]]) <- c("lodds","shape","scale")
+
+#fill-in transition matrices with sampled values and use Log-Logistic hazard function to generate, at each sampled parameter value, the probability values at first cycle for each trt between Recurrence-free and Recurrence in the model   
+    trans_matrices_psa[tname, 1, , "Recurrence-free", "Recurrence"] <- (1 - invlogit(recurr_sample[[tname]][,"lodds"])) * 
+      (1 - exp(-Hllogis(1, shape = exp(recurr_sample[[tname]][,"shape"]), scale = exp(recurr_sample[[tname]][,"scale"]))))
+#do the same at each successive cycle by computing conditional prob of recurrence at cycle i given no recurrence at i-1    
+    for(i_cycle in 2:n_cycle){
+      trans_matrices_psa[tname, i_cycle, , "Recurrence-free", "Recurrence"] <- (1 - invlogit(recurr_sample[[tname]][,"lodds"])) * 
+        (1 - exp(-Hllogis(i_cycle, shape = exp(recurr_sample[[tname]][,"shape"]), scale = exp(recurr_sample[[tname]][,"scale"]))) / 
+           exp(-Hllogis(i_cycle - 1, shape = exp(recurr_sample[[tname]][,"shape"]), scale = exp(recurr_sample[[tname]][,"scale"]))))
+    }
+}
+
+#probabilities of death due to all cause generated using Gompertz hazard function and expressed as 1 - prob of surviving (still time-dependent)
+#start at first cycle
+trans_matrices_psa[, 1, , "Recurrence-free", "Dead(all cause)"] <- trans_matrices_psa[, 1, , "Recurrence", "Dead(all cause)"] <- 1 - exp(-Hgompertz(1, shape = 0.0885, rate = 0.0081))
+#the compute conditional prob of death at cycle i given survival at i-1 (expressed as 1 -corresponding survival prob)
+for(i_cycle in 2:n_cycle){
+  trans_matrices_psa[, i_cycle, , "Recurrence-free", "Dead(all cause)"] <- trans_matrices_psa[, i_cycle, , "Recurrence", "Dead(all cause)"] <- 1 - exp(-Hgompertz(i_cycle, shape = 0.0885, rate = 0.0081)) / 
+    exp(-Hgompertz(i_cycle - 1, shape = 0.0885, rate = 0.0081))
+}
+#singe single point estimate use for parameters, then same transition probs used at each of the S samples
+
+#put point values for parameters in a mean vector
+crr_lmean <- c(lrate_cdeath_none, lrate_cdeath_A, lrate_cdeath_AB)
+#create covariance matrix expressing association among these parameters (need to get these values from literature/experts or some reasonable guess)
+#since three parameters are jointly modelled then we need 3*(3-1) = 6 values for their covariance matrix (Var(lrateNone), Var(lrrA), Var(lrrAB), Cov(lrateNone,lrrA), Cov(lrateNone,lrrAB), Cov(lrrA,lrrAB))
+crr_lcov <- matrix(c(0.0065, -0.0065, -0.0065,
+                     -0.0065, 0.0131, 0.0065,
+                     -0.0065, 0.0065, 0.0157), 
+                   nrow = 3, ncol = 3)
+#sample S parameter values using multivariate normal
+crr_lsample <- mvrnorm(S, mu = crr_lmean, Sigma = crr_lcov)
+
+#give names to list elements
+names(crr_lmean) <- c("lrate None", "lrr A", "lrr AB")
+colnames(crr_lcov) <- c("lrate None", "lrr A", "lrr AB")
+rownames(crr_lcov) <- c("lrate None", "lrr A", "lrr AB")
+colnames(crr_lsample) <- c("lrate None", "lrr A", "lrr AB")
+
+#use sampled values to generate transition prob to death-cancer state using exponential distribution on the rate scale (time-independent but varies across samples)
+#fill in values in lists for each treatment
+trans_matrices_psa["None", , , "Recurrence", "Dead(cancer)"] <- rep(exp(-exp(crr_lsample[, "lrate None"])), each = n_cycle)
+trans_matrices_psa["A", , , "Recurrence", "Dead(cancer)"] <- rep(exp(-exp(crr_lsample[, "lrr A"])), each = n_cycle)
+trans_matrices_psa["AB", , , "Recurrence", "Dead(cancer)"] <- rep(exp(-exp(crr_lsample[, "lrr AB"])), each = n_cycle)
+
+#assume that cancer-related mortality is zero if in the Recurrence-free state for all treatments, cycles and samples
+trans_matrices_psa[, , , "Recurrence-free", "Dead(cancer)"] <- 0
+
+#ensure sum of probs of types of death never exceed one
+#add death prob together with respect to treatments, cycles, and samples
+sum_death_p <- apply(trans_matrices_psa[, , , "Recurrence", c("Dead(all cause)", "Dead(cancer)")], c(1,2,3), sum)
+
+#do not apply scale factor if sums < 1
+sum_death_p[sum_death_p<=1] <- 1
+#apply scale factors for each type of death (at each cycle, sample and trt) with respect to the sum total
+trans_matrices_psa[, , ,"Recurrence", "Dead(all cause)"] <- trans_matrices_psa[, , ,"Recurrence", "Dead(all cause)"] / sum_death_p
+trans_matrices_psa[, , ,"Recurrence", "Dead(cancer)"] <- trans_matrices_psa[, , ,"Recurrence", "Dead(all cause)"] / sum_death_p
+
+#specify remaining transition probs under assumption of no recovery from recurrence at any cycle, trt and sample
+trans_matrices_psa[, , , "Recurrence", "Recurrence-free"] <- 0
+#no transition out of death states
+trans_matrices_psa[, , , "Dead(all cause)", ] <- 0
+trans_matrices_psa[, , , "Dead(cancer)", ] <- 0
+trans_matrices_psa[, , , "Dead(all cause)", "Dead(all cause)"] <- 1
+trans_matrices_psa[, , , "Dead(cancer)", "Dead(cancer)"] <- 1
+
+#to avoid instability when probs estimated very close to 0, set them to 0
+trans_matrices_psa[trans_matrices_psa < 0] = 0
+
+#ensure probs from a state sum up to 1
+for(i_state in 1:length(state_names)){
+  trans_matrices_psa[, , , i_state, i_state] <- 1 - apply(trans_matrices_psa[, , , i_state, -i_state], c(1,2,3), sum, na.rm=TRUE)
+}
+
+#run following code to check that all rows sum up to 1 (ie transition prob from each state to any other state at a given cycle for each treatment and sample)
+#apply(trans_matrices_psa, c(1,2,3), rowSums)
+
+#create zero-filled array to store trace values at each cycle for each trt,  sample and state
+Mtrace_inhomo_psa <- array(0, 
+  dim = c(n_trt, n_cycle, S, n_state),
+  dimnames = list(trt_names, cycle_names, NULL, state_names))
+
+#assume everyone starts in the Recurrence-free state at cycle 1
+Mtrace_inhomo_psa[, 1, , "Recurrence-free"] <- 1 #100% proportions
+
+#fill in trace values 
+for(i_trt in 1:n_trt){ #loop over treatments
+  for(s in 1:S){ #loop over samples
+    for(i_cycle in 2:n_cycle){ #loop over cycles
+      #update trace for each state as matrix product between trace values at previous cycle and transition probs at current cycle 
+      Mtrace_inhomo_psa[i_trt, i_cycle, s, ] <- Mtrace_inhomo_psa[i_trt, i_cycle - 1, s, ] %*% trans_matrices_psa[i_trt, i_cycle, s, , ]
+    }
+  }
+}
+
+#state costs depend on cycle and trt given that recurrence-free costs depend on the time and trt dependent prob of recurrence
+#create zero-filled array for state costs for each trt, cycle, sample and state
+state_c_psa <- array(0, dim = c(n_trt, n_cycle, S, n_state),
+                     dimnames = list(trt_names, cycle_names, NULL, state_names))
+
+#compute cost of recurrence-free state as product between prob of having a recurrence and its related costs (and set costs of recurrence state to zero)
+state_c_psa[, , , "Recurrence-free"] <- trans_matrices_psa[, , , "Recurrence-free", "Recurrence"] * 40000
+state_c_psa[, , , "Recurrence"] <- 0
+#set costs of death states to zero
+state_c_psa[, , , "Dead(all cause)"] <- 0
+state_c_psa[, , , "Dead(cancer)"] <- 0
+
+#do the same for utilities/QALYs but these are not time or trt-dependent
+#create zero-filled array to contain utilities for each sample and state
+state_e_psa <- array(0, dim = c(S, n_state),
+                     dimnames = list(NULL, state_names))
+#generate utility samples using normal distribution with state-specific information retrieved from literature or based on plausible guess
+state_e_psa[, "Recurrence-free"] <- rnorm(S, mean = 0.8, sd = 0.1*0.8)
+state_e_psa[, "Recurrence"] <- rnorm(S, mean = 0.6, sd = 0.1*0.6)
+state_e_psa[, "Dead(all cause)"] <- 0
+state_e_psa[, "Dead(cancer)"] <- 0
+
+#set empty array to contain trt costs and QALYs for each sample
+trt_cost_psa <- trt_qaly_psa <- array(dim = c(n_trt, S),
+                      dimnames = list(trt_names, NULL))
+#generate sample values for toxicity costs, disutility and probs based on information assuming using Normal distributions
+p_tox_A_psa <- rnorm(S, mean = 0.2, sd = 0.1*0.2)
+p_tox_AB_psa <- rnorm(S, mean = 0.4, sd = 0.1*0.4)
+cost_tox_psa <- rnorm(S, mean = 2000, sd = 0.1*2000)
+disu_tox_psa <- rnorm(S, mean = -0.1, sd = 0.1*0.1)
+
+#assign trt costs and QALYs for all samples
+trt_cost_psa["None", ] <- 0
+trt_cost_psa["A", ] <- 5000 + p_tox_A_psa*cost_tox_psa
+trt_cost_psa["AB", ] <- 10000 + p_tox_AB_psa*cost_tox_psa
+trt_qaly_psa["None", ] <- 0
+trt_qaly_psa["A", ] <- p_tox_A_psa*disu_tox_psa
+trt_qaly_psa["AB", ] <- p_tox_AB_psa*disu_tox_psa
+
+#set empty array to contain costs and QALYs accrued per cycle (for a given trt and sample) 
+cycle_c_psa <- cycle_e_psa <- array(dim = c(n_trt, n_cycle, S),
+                      dimnames = list(trt_names, cycle_names, NULL))
+#set empty array to contain total costs and QALYs accrued across cycles (for a given trt and sample) 
+total_c_psa <- total_e_psa <- array(dim = c(n_trt, S),
+                      dimnames = list(trt_names, NULL))
+
+#fill in cycle and total outcome values into the arrays by looping over trt and samples
+for(i_trt in 1:n_trt){
+  for(s in 1:S){
+    #cycle costs by summing over costs across states for a given trt and sample
+  cycle_c_psa[i_trt, , s] <- rowSums(Mtrace_inhomo_psa[i_trt, , s, ] * state_c_psa[i_trt, , s, ])
+    #cycle QALYs from matrix x between trace and state QALYs at given sample
+  cycle_e_psa[i_trt, , s] <- Mtrace_inhomo_psa[i_trt, , s, ] %*% state_e_psa[s, ]
+  #compute total costs and QALYs across cycles and applying discount factor
+  total_c_psa[i_trt, s] <- trt_cost_psa[i_trt, s] + cycle_c_psa[i_trt, , s] %*% disc_c_seq
+  total_e_psa[i_trt, s] <- trt_qaly_psa[i_trt, s] + cycle_e_psa[i_trt, , s] %*% disc_e_seq
+  }
+}
+
+#get incremental estimates (for each sample)
+delta_c_psa <- total_c_psa[-none_index,] - total_c_psa[none_index,]
+delta_e_psa <- total_e_psa[-none_index,] - total_e_psa[none_index,]
+ 
+#nmb for each comparison with reference threshold value k=10000 (for each sample)
+v_nmb_psa <- 10000*total_e_psa - total_c_psa
+
+#inmb for a k value of 10000 (for each sample)
+inmb_psa <- 10000*delta_e_psa - delta_c_psa
+
+#combine CE results and show average results across samples
+total_c_psa_avg <- apply(total_c_psa, 1, mean)
+total_e_psa_avg <- apply(total_e_psa, 1, mean)
+delta_c_psa_avg <- apply(delta_c_psa, 1, mean)
+delta_e_psa_avg <- apply(delta_e_psa, 1, mean)
+v_nmb_psa_avg <- apply(v_nmb_psa, 1, mean)
+inmb_psa_avg <- apply(inmb_psa, 1, mean)
+icer_psa <- delta_c_psa_avg/delta_e_psa_avg
+
+res_ce_psa <- data.frame(
+  "Costs"=round(total_c_psa_avg),
+  "QALYs"=round(total_e_psa_avg, 3),
+  "Delta_c"=c(NA,round(delta_c_psa_avg)),
+  "Delta_e"=c(NA,round(delta_e_psa_avg, 3)),
+  "ICER"=c(NA,round(icer_psa)),
+  "NMB"=round(v_nmb_psa_avg),
+  "INMB"=c(NA,round(inmb_psa_avg))
+)
+```
+
+## Markov Models - choosing parameter distributions
+
+- \myred\textbf{Transition probabilities} \black $RF \rightarrow R$ specified using *log-logistic cure model*, indexed by three parameters: *log-odds, shape, scale*
+
+. . .
+
+- Account for \olive\textbf{correlation} \black via *joint normality* for each treatment:
+
+  + set mean values equal to point values in base-case analysis
+  + fill-in covariance matrix values based on literature/expert opinion
+
+. . .
+
+- For example, for the no treatment option ("None"):
+
+\scriptsize
+$$ 
+\begin{aligned}
+\begin{pmatrix}
+\text{log-odds}\\
+\text{shape}\\
+\text{scale}\\
+\end{pmatrix} &\sim  \text{Normal}
+\begin{bmatrix}
+\begin{pmatrix}
+-0.4398\\
+0.4597\\
+0.1379
+\end{pmatrix}\!\!,&
+\begin{pmatrix}
+0.0185 & 0.0035 & -0.0037 \\
+0.0035 & 0.0063 & -0.0026\\
+-0.0037 & -0.0026 &  0.0089 
+\end{pmatrix}
+\end{bmatrix}
+\end{aligned}
+$$
+
+## Markov Models - choosing parameter distributions
+
+- \myred\textbf{Transition probabilities} \black $(RF,R) \rightarrow OCD$ specified using *Gompertz* hazard function, indexed by two parameters: *shape, rate*
+
+. . .
+
+- In theory, could also jointly model these parameters as in $RF \rightarrow R$, but it may be *reasonable* to simplify the model:
+
+  + if parameter estimates obtained from distributions fitted to \myblue\textbf{population-level} \black data (eg life tables)
+  + assume values close to *true* population parameters
+
+. . .
+
+- Keep \myred\textbf{single point} \black values for these parameters (same across treatments):
+
+$$
+\begin{aligned}
+\text{shape} = 0.0885\\
+\text{rate} = 0.0081
+\end{aligned}
+$$
+
+## Markov Models - choosing parameter distributions
+
+- \myred\textbf{Transition probabilities} \black $R \rightarrow CD$ specified with a different *Exponential* distribution for each treatment, indexed by the following parameters: *log rate* (None), *log rate ratios* (A, AB)
+
+. . .
+
+- Account for \olive\textbf{correlation} \black via *joint normality* among treatments:
+
+  + set mean values equal to point values in base-case analysis
+  + fill-in covariance matrix values based on literature/expert opinion
+
+\scriptsize
+$$ 
+\begin{aligned}
+\begin{pmatrix}
+\text{log rate}_{\text{None}}\\
+\text{log rate ratio}_{\text{A}}\\
+\text{log rate ratio}_{\text{AB}}\\
+\end{pmatrix} &\sim  \text{Normal}
+\begin{bmatrix}
+\begin{pmatrix}
+-0.5734\\
+0.0548\\
+0.0548
+\end{pmatrix}\!\!,&
+\begin{pmatrix}
+0.0065 & -0.0065 & -0.0065 \\
+-0.0065 & 0.0131 & 0.0065\\
+-0.0065 & 0.0065 &  0.0157 
+\end{pmatrix}
+\end{bmatrix}
+\end{aligned}
+$$
+
+## Markov Models - transition matrices in PSA
+
+- Sample $S$ values from each distribution for each parameter:
+
+  + Use sampled values to generate corresponding \myred\textbf{transition probabilities} \black
+  + Fill-in values in the \myred\textbf{transition matrices} \black
+  + Ensure that values sum from a given state to others (for given treatment, cycle and sample) is one
+
+. . . 
+
+- For instance, we can look at the first $5$ samples (columns) at the first $5$ cycles (rows) related to the \myred\textbf{transition probabilities} \black $RF-R$ (eg for None):
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+ex_ts_psa <- trans_matrices_psa["None",1:5,1:5,"Recurrence-free","Recurrence"]
+ex_ts_psa <- as.matrix(unlist(ex_ts_psa))
+
+kable(ex_ts_psa, booktabs = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+
+## Markov Models - Markov trace in PSA
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#create zero-filled array to store trace values at each cycle for each trt,  sample and state
+Mtrace_inhomo_psa <- array(0, 
+  dim = c(n_trt, n_cycle, S, n_state),
+  dimnames = list(trt_names, cycle_names, NULL, state_names))
+
+#assume everyone starts in the Recurrence-free state at cycle 1
+Mtrace_inhomo_psa[, 1, , "Recurrence-free"] <- 1 #100% proportions
+
+#fill in trace values 
+for(i_trt in 1:n_trt){ #loop over treatments
+  for(s in 1:S){ #loop over samples
+    for(i_cycle in 2:n_cycle){ #loop over cycles
+      #update trace for each state as matrix product between trace values at previous cycle and transition probs at current cycle 
+      Mtrace_inhomo_psa[i_trt, i_cycle, s, ] <- Mtrace_inhomo_psa[i_trt, i_cycle - 1, s, ] %*% trans_matrices_psa[i_trt, i_cycle, s, , ]
+    }
+  }
+}
+```
+
+- Use \myred\textbf{transition matrices} \black to construct *probabilistic* version of \myred\textbf{Markov trace} \black $\pi_t(s)$:
+
+  + Computed as before for each treatment, cycle and state, but 
+  + with an extra dimension to store $S$ samples
+
+. . .
+
+- For instance, we can look at the first $5$ samples (columns) at the first $5$ cycles (rows) related to the \myred\textbf{Markov trace} \black values for $RF$ (None):
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+ex_mt_psa <- Mtrace_inhomo_psa["None",1:5,1:5,"Recurrence"]
+ex_mt_psa <- as.matrix(unlist(ex_mt_psa))
+
+kable(ex_mt_psa, booktabs = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 8, latex_options = "scale_down")
+```
+
+## Markov Models - costs and utilities in PSA
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#state costs depend on cycle and trt given that recurrence-free costs depend on the time and trt dependent prob of recurrence
+#create zero-filled array for state costs for each trt, cycle, sample and state
+state_c_psa <- array(0, dim = c(n_trt, n_cycle, S, n_state),
+                     dimnames = list(trt_names, cycle_names, NULL, state_names))
+
+#compute cost of recurrence-free state as product between prob of having a recurrence and its related costs (and set costs of recurrence state to zero)
+state_c_psa[, , , "Recurrence-free"] <- trans_matrices_psa[, , , "Recurrence-free", "Recurrence"] * 40000
+state_c_psa[, , , "Recurrence"] <- 0
+#set costs of death states to zero
+state_c_psa[, , , "Dead(all cause)"] <- 0
+state_c_psa[, , , "Dead(cancer)"] <- 0
+
+#do the same for utilities/QALYs but these are not time or trt-dependent
+#create zero-filled array to contain utilities for each sample and state
+state_e_psa <- array(0, dim = c(S, n_state),
+                     dimnames = list(NULL, state_names))
+#generate utility samples using normal distribution with state-specific information retrieved from literature or based on plausible guess
+state_e_psa[, "Recurrence-free"] <- rnorm(S, mean = 0.8, sd = 0.1*0.8)
+state_e_psa[, "Recurrence"] <- rnorm(S, mean = 0.6, sd = 0.1*0.6)
+state_e_psa[, "Dead(all cause)"] <- 0
+state_e_psa[, "Dead(cancer)"] <- 0
+
+#set empty array to contain trt costs and QALYs for each sample
+trt_cost_psa <- trt_qaly_psa <- array(dim = c(n_trt, S),
+                      dimnames = list(trt_names, NULL))
+#generate sample values for toxicity costs, disutility and probs based on information assuming using Normal distributions
+p_tox_A_psa <- rnorm(S, mean = 0.2, sd = 0.1*0.2)
+p_tox_AB_psa <- rnorm(S, mean = 0.4, sd = 0.1*0.4)
+cost_tox_psa <- rnorm(S, mean = 2000, sd = 0.1*2000)
+disu_tox_psa <- rnorm(S, mean = -0.1, sd = 0.1*0.1)
+
+#assign trt costs and QALYs for all samples
+trt_cost_psa["None", ] <- 0
+trt_cost_psa["A", ] <- 5000 + p_tox_A_psa*cost_tox_psa
+trt_cost_psa["AB", ] <- 10000 + p_tox_AB_psa*cost_tox_psa
+trt_qaly_psa["None", ] <- 0
+trt_qaly_psa["A", ] <- p_tox_A_psa*disu_tox_psa
+trt_qaly_psa["AB", ] <- p_tox_AB_psa*disu_tox_psa
+
+#set empty array to contain costs and QALYs accrued per cycle (for a given trt and sample) 
+cycle_c_psa <- cycle_e_psa <- array(dim = c(n_trt, n_cycle, S),
+                      dimnames = list(trt_names, cycle_names, NULL))
+#set empty array to contain total costs and QALYs accrued across cycles (for a given trt and sample) 
+total_c_psa <- total_e_psa <- array(dim = c(n_trt, S),
+                      dimnames = list(trt_names, NULL))
+
+#fill in cycle and total outcome values into the arrays by looping over trt and samples
+for(i_trt in 1:n_trt){
+  for(s in 1:S){
+    #cycle costs by summing over costs across states for a given trt and sample
+  cycle_c_psa[i_trt, , s] <- rowSums(Mtrace_inhomo_psa[i_trt, , s, ] * state_c_psa[i_trt, , s, ])
+    #cycle QALYs from matrix x between trace and state QALYs at given sample
+  cycle_e_psa[i_trt, , s] <- Mtrace_inhomo_psa[i_trt, , s, ] %*% state_e_psa[s, ]
+  #compute total costs and QALYs across cycles and applying discount factor
+  total_c_psa[i_trt, s] <- trt_cost_psa[i_trt, s] + cycle_c_psa[i_trt, , s] %*% disc_c_seq
+  total_e_psa[i_trt, s] <- trt_qaly_psa[i_trt, s] + cycle_e_psa[i_trt, , s] %*% disc_e_seq
+  }
+}
+
+#get incremental estimates (for each sample)
+delta_c_psa <- total_c_psa[-none_index,] - total_c_psa[none_index,]
+delta_e_psa <- total_e_psa[-none_index,] - total_e_psa[none_index,]
+ 
+#nmb for each comparison with reference threshold value k=10000 (for each sample)
+v_nmb_psa <- 10000*total_e_psa - total_c_psa
+
+#inmb for a k value of 10000 (for each sample)
+inmb_psa <- 10000*delta_e_psa - delta_c_psa
+
+#combine CE results and show average results across samples
+total_c_psa_avg <- apply(total_c_psa, 1, mean)
+total_e_psa_avg <- apply(total_e_psa, 1, mean)
+delta_c_psa_avg <- apply(delta_c_psa, 1, mean)
+delta_e_psa_avg <- apply(delta_e_psa, 1, mean)
+v_nmb_psa_avg <- apply(v_nmb_psa, 1, mean)
+inmb_psa_avg <- apply(inmb_psa, 1, mean)
+icer_psa <- delta_c_psa_avg/delta_e_psa_avg
+
+res_ce_psa <- data.frame(
+  "Costs"=round(total_c_psa_avg),
+  "QALYs"=round(total_e_psa_avg, 3),
+  "Delta_c"=c(NA,round(delta_c_psa_avg)),
+  "Delta_e"=c(NA,round(delta_e_psa_avg, 3)),
+  "ICER"=c(NA,round(icer_psa)),
+  "NMB"=round(v_nmb_psa_avg),
+  "INMB"=c(NA,round(inmb_psa_avg))
+)
+
+```
+
+- Generate \myred\textbf{state costs} \black  $c_{s}(t,s)=(c_{RF}(t,s),c_{R},c_{OCD},c_{CD})$ as before: 
+
+  + $c_{RF}(t,s)$ time/sample-dependent as product between:
+  + cycle/sample-specific recurrence probability 
+  + assumed recurrence cost (eg $40000$) 
+  + $(c_{R},c_{OCD},c_{CD})=0$ 
+
+. . .
+
+- Generate \myblue\textbf{state utilities} \black $u_{s}(s)=(u_{RF}(s),u_{R}(s),u_{OCD},u_{CD})$ as before: 
+
+  + $(u_{RF}(s),u_{R}(s))\overset{\text{iid}}\sim \text{Normal}(\mu,\sigma)$
+  + time-independent but sampled from independent Normals with assumed mean $\mu$ and sd $\sigma$
+  + $(u_{OCD},u_{CD})=0$ 
+
+
+## Markov Models - costs and utilities in PSA
+
+- Generate \myred\textbf{treatment costs} \black  $c_{\text{trt}}(s)$ related to specific events (eg toxicity) as before: 
+
+  + $c_{\text{trt}}(s)=c_{0,\text{trt}} + c_{\text{tox}}(s)\times p_{\text{tox},\text{trt}}(s)$
+  + assume fixed point cost value for each treatment
+  + sample toxicity cost from independent Normals
+  + sample toxicity probs from independent Normals
+
+- Generate \myblue\textbf{treatment disutilities} \black  $u_{\text{trt}}(s)$ related to specific events (eg toxicity) as before: 
+
+  + $u_{\text{trt}}(s)=u_{\text{tox}}(s)\times p_{\text{tox},\text{trt}}(s)$
+  + sample toxicity disutility from independent Normals
+  + sample toxicity probs from independent Normals
+    
+## Markov Models - costs and utilities in PSA
+
+- Compute treatment-specific \myred\textbf{cycle costs} \black $c(t,s)$ and \myblue\textbf{cycle utilities} \black $u(t,s)$ as before:
+
+  + product between \myred\textbf{Markov trace} \black $\pi_t(s)$ and \myred\textbf{state costs} \black $c_{s}(t,s)$ at each cycle and sample, summed across states
+  + product between \myred\textbf{Markov trace} \black $\pi_t(s)$ and \myblue\textbf{state utilities} \black $u_{s}(s)$ at each cycle and sample, summed across states
+
+. . .
+
+- Compute treatment-specific \myred\textbf{total costs} \black and \myblue\textbf{total utilities} \black as before:
+
+  + product between $c(t,s)$ and \olive\textbf{discount} \black factors $d^c(t)$, summed across cycles, then added to \myred\textbf{treatment costs} \black $(c_{\text{trt}}(s))$
+  + product between $u(t,s)$ and \olive\textbf{discount} \black factors $d^e(t)$, summed across cycles, then added to \myblue\textbf{treatment utilities} \black $(u_{\text{trt}}(s))$
+
+
+## Markov Models - CE results in PSA
+
+- Total outcome values now available for $S$ samples:
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+totce_psa <- cbind.data.frame(t(total_c_psa[,1:5]), t(total_e_psa[,1:5]))  
+names(totce_psa) <- c("costs-None","costs-A","costs-AB","qalys-None","qalys-A","qalys-AB")
+
+kable(totce_psa, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 6, latex_options = "scale_down")
+```
+
+. . .
+
+- Summarise **CE results**, for example by looking at *average values*
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+kable(res_ce_psa, booktabs = TRUE, row.names = TRUE ,digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = TRUE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 6, latex_options = "scale_down")
+```
+
+## Markov Models - CE results in PSA
+
+- Use $S$ samples to generate standard **PSA** CE output
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| layout-ncol: 2
+
+library(BCEA) #load package
+#generate CE output (also for multiple interventions with ref=assumed comparator)
+ce_markov_bcea <- bcea(eff = t(total_e_psa), cost = t(total_c_psa), ref = 1, interventions = trt_names, Kmax = 100000)
+
+#scatter plot of delta_e and delta_c with assumed value k for wtp
+#points in shaded area  / total points = prob of cost-effectiveness at k
+ceplane.plot(ce_markov_bcea, wtp = 10000)
+
+#prob of cost-effectiveness for a range of wtp values
+ceac.plot(ce_markov_bcea)
+```
+
+## Markov Models - conclusions
+
+- Structure can be extended to handle \myblue\textbf{individual models} \black  in \olive\textbf{continuous time} \black under a \myred\textbf{semi-Markov assumption} \black 
+
+. . .
+
+- \myblue\textbf{Individual models} \black, such as *Discrete Event Simulation* (DES) models, preferred if:
+
+  + \myred\textbf{events} \black better describe progression of the disease rather than \myblue\textbf{states}\black
+  + individual outcomes are \myred\textbf{heterogeneous} \black
+  + individual \olive\textbf{disease history} \black has a *complex relationship* with future disease course
+
+. . .
+
+- **Network Meta-Analysis** (NMA) can be used to combine evidence from *multiple sources* to derive the estimate for the parameters
+
+. . .
+
+- Not considered **DSA** or **structural uncertainty**:
+
+  + changing values of parameter \myred\textbf{one at a time} \black across a pre-defined set of values instead of distributions 
+  + changing number/type of \myblue\textbf{allowed transitions} \black or \myblue\textbf{distributions} 
+
+## Network Meta-Analysis
+
+- RCTs are the "gold standard" to estimate treatment effects but *head-to-head* RCTs for each treatment comparison may not be available
+
+. . .
+
+- **Network Meta-Analysis** (NMA) is primary method for \myred\textbf{indirect} \black treatment comparison
+
+  + allows to compare treatment assessed in separate trials wrt others
+  + different NMA approaches exist depending on the characteristics of the \olive\textbf{available network}\black
+
+- For instance, assume interest is in treatment effect on **binary outcome** (eg pain prevention) between two drugs (A vs B) for which:
+
+  + No *head-to-head* comparison for A vs B is available, but
+  + *Odds ratios* available for A and B wrt drug C, ie $\text{OR}_{\text{AC}}$ and $\text{OR}_{\text{BC}}$
+  + use \myblue\textbf{direct} \black evidence (A vs C \& B vs C) to  \myred\textbf{indirectly} \black compare A vs B
+
+## Network Meta-Analysis - example
+
+```{=latex}
+\begin{center}
+\vspace*{-0.5cm}
+\scalebox{0.5}{
+\begin{tikzpicture}
+\node[circle, draw, align=center, top color=white, 
+bottom color=blue!20, font=\small, minimum height=1cm, minimum width=1cm, very thick](A) at (-0.3,0) {A};
+\node[right of=A, circle, draw, align=center, top color=white, 
+bottom color=red!20, font=\small, minimum height=1cm, minimum width=1cm, very thick](B) at (4.5,0) {B};
+\node[below right of=A, circle, draw, align=center, top color=white, 
+bottom color=green!20, font=\small, minimum height=1cm, minimum width=1cm, very thick](C) at (2,-4.2) {C};
+
+\draw[>=latex,shorten >=0pt, dashed, black,very thick] (A) edge [ "{\normalsize$\text{OR}_{AB}=\text{?}$}"] (B);
+\draw[>=latex,shorten >=0pt, black,very thick] (C) edge [ "{\normalsize$\text{OR}_{AC}=0.5$}"] (A);
+\draw[>=latex,shorten >=0pt, black,very thick] (B) edge [ "{\normalsize$\text{OR}_{BC}=0.6$}"] (C);
+
+\end{tikzpicture}
+}
+\end{center}
+```
+
+. . .
+
+- An historical approach to compute $\text{OR}_{\text{AB}}$ in this network is the  **Bucher method**:
+
+  + $\text{OR}_{\text{AB}} = \frac{\text{OR}_{\text{AC}}}{\text{OR}_{\text{BC}}} = \frac{0.5}{0.6}=0.83$
+  + on \myred\textbf{log-odds} \black scale (*linear scale*): $\log(\text{OR}_{\text{AB}})=\log(\text{OR}_{\text{AC}})-\log(\text{OR}_{\text{BC}})$
+  + where: $\text{SE}(\log(\text{OR}_{\text{AB}}))=\sqrt{\text{SE}(\log(\text{OR}_{\text{AC}}))^2+\text{SE}(\log(\text{OR}_{\text{BC}}))^2}$
+
+## Network Meta-Analysis - example
+
+- Suppose \olive\textbf{evidence} \black about a new drug D is added to the network:
+
+  + which is compared to B in a new trial, eg $\text{OR}_{\text{BD}}=0.9$
+  + but interest is in the comparison to A, ie $\text{OR}_{\text{AD}}=\text{?}$
+
+- In this case, we can apply **Bucher method** in steps:
+
+  1. Derive $\text{OR}_{\text{AB}}$ using \myblue\textbf{direct} \black evidence from the comparison between A vs C and B vs C 
+  2. use $\text{OR}_{\text{AB}}$ to obtain $\text{OR}_{\text{AD}}$ from the \myred\textbf{indirect} \black evidence for A vs B and the \myblue\textbf{direct} \black evidence for B vs D
+
+- NMA generalises **Bucher method** to combine \myblue\textbf{direct} \black and \myred\textbf{indirect} \black evidence on \olive\textbf{multiple} \black treatment comparisons:
+
+  + each obtained from one or multiple sources
+  + estimate uncertainty under a \olive\textbf{consistency assumption} \black
+
+## Network Meta-Analysis - methods
+
+- \olive\textbf{Consistency assumption}\black: *relative treatment effects can be added to correctly estimate another treatment effect of interest*
+
+. . .
+
+- Focus on \myred\textbf{binary outcomes} \black $r_{ik}$ for treatment $k$ in study $i$:
+
+  + $r_{ik}\sim\text{Binomial}(p_{ik},n_{ik})$
+  + $p_{ik}=$ probability of the event on treatment $k$ in study $i$
+  + $n_{ik}=$ number of patients on treatment $k$ in study $i$
+
+. . .
+
+- To ensure \olive\textbf{consistency assumption} \black can hold, need to convert the probability to a transformed scaled using *logistic* function
+
+  + $\text{logit}(p_{ik})=\log \biggl(\frac{p_{ik}}{1-p_{ik}}\biggl)$
+  + scale of the *log odds* and *log odds ratios*
+
+. . .
+
+- Then model the transformed probabilities using a \myblue\textbf{linear predictor} \black:
+
+  + $\text{logit}(p_{ik})=\mu_i + \delta_{ibk}$
+  + $\delta_{ibk}=$ *log odds ratios* for treatment $k$ vs $b$ (baseline) in trial $i$
+
+## Network Meta-Analysis - methods
+
+- **Objective**: relate study-specific *log odds ratios* between treatments in study arms to those relative to a \myred\textbf{common treatment}\black, say treatment $1$, often called the *reference* treatment
+
+. . .
+
+- This can be achieved under different assumptions about the study-specific treatment effects:
+
+  + \myred\textbf{fixed effects}\black: $\delta_{ibk}=d_{i1k}-d_{i1b}$ - same across studies
+  + \myblue\textbf{random effects}\black: $\delta_{ibk}\sim \text{Normal}(d_{i1k}-d_{i1b},\sigma^2)$ - come from a Normal distribution with \olive\textbf{heterogeneity} \black variance $\sigma^2$
+
+. . .
+
+- \olive\textbf{Heterogeneity} \black refers to variation in treatment effects across studies
+
+  + choice between \myred\textbf{fixed} \black and \myblue\textbf{random} \black effects based on assessment of extent of heterogeneity (eg, baseline characteristics, outcome definitions, time points, etc.)
+  + high $\sigma^2$ $\rightarrow$ \myblue\textbf{random effects}\black (eg, if $\sigma$ is considerably larger than *log odds ratios*)
+
+## Network Meta-Analysis - estimation \& assessment
+
+- NMA conducted under either a \myred\textbf{frequentist} \black or \myblue\textbf{Bayesian} \black approach
+
+. . .
+
+- \myblue\textbf{Bayesian}\black: 
+
+  + parameters (eg $\sigma$) \myblue\textbf{random variables} \black with distributions called *priors* 
+  + represent beliefs about parameter values **before** observing the data
+  + can be *informative* or *vague* based on whether they convey or not **external information** into the model 
+  + priors combined with data to obtain *posterior* distributions
+  + \myred\textbf{relative model fit} \black assessed via **Deviance Information Criterion** (DIC)
+
+- \myred\textbf{frequentist}\black:
+
+  + \myred\textbf{model fit} \black assessed from an estimate of the total $\sigma$ in network $\text{Q}_{\text{tot}}$
+  + generalised Cochran's $\text{Q}$ used in *pairwise* meta-analyses to test the between study heterogeneity
+  + produce $I^2$ statistic applicable to NMA (between $[0,100]\%$ with higher values indicating a higher amount of heterogeneity)
+
+## Network Meta-Analysis - Meta-Regression
+
+- If high $\sigma$ in treatment effects, **Network Meta-Regression** (NMR) can be used to explain this variation based on \myblue\textbf{measured covariates}\black
+
+. . .
+
+- Assume pairwise meta-analysis of three trials, where:
+
+  + $d_{12}=$ treatment effect (log-odds) between trt 1 and 2 
+  + $x_i=$ mean age of patients in trial $i$
+
+. . .
+
+- If age is a \olive\textbf{treatment effect-modifier}\black, ie trial-specific treatment effects are related to age, can use meta-regression model $\delta_{i12}=d_{12}+x_{i}\beta$, where $\beta$ has to be estimated
+
+. . .
+
+- Extend framework to NMA (binary outcomes): $\text{logit}(p_{ik})=\mu_i + \delta_{ibk} + x_{ik}\beta_{ibk}$
+
+  + $x_{ik}=$ trial/arm-specific covariate value
+  + $\beta_{ibk}=$ trial-specific treatment-covariate \olive\textbf{interaction} \black 
+  + where $\beta_{ibk} = \beta_{ik} - \beta_{ib}$
+
+## Network Meta-Analysis - case study
+
+- Apply methods to NMA of irrigation and intracavity lavage techniques to prevent *Surgical Site Infections* (SSIs) - Thom et al. 2012
+
+\footnotesize 
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#load("C:/Users/Andrea/Documents/talks/HSR_2025/appendix/icl_data_long.rda")
+load("~/talks/HSR_2025/appendix/icl_data_long.rda")
+icl_data_long_head <- head(icl_data_long)
+
+kable(icl_data_long_head, booktabs = TRUE, row.names = FALSE) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = FALSE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 6, latex_options = "scale_down")
+```
+
+\normalsize 
+
+- Data form $39$ studies on:
+
+  + treatment (`trt`), number of SSIs (`r`) and patients (`n`), and two binary covariates (`contamination_level`, `surgery_type`)
+
+## Network Meta-Analysis - Bayesian NMA
+
+- Use `multinma` `R` package to fit model using Bayesian software `Stan` (Carpenter et al. 2017)
+
+. . .
+
+- First, check the \olive\textbf{network}\black:
+
+  + nodes $\rightarrow$ treatments and patients (size)
+  + edges $\rightarrow$ comparisons and studies (thickness)
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| out-width: 70%
+#| out-height: 55%
+#| fig-align: center
+
+library(multinma) #load package
+#aggregated data on study arm
+icl_network <- set_agd_arm(icl_data_long, study = study, trt = trt, 
+    r = r, n = n, 
+    trt_class = as.numeric(trt != "nonantibacterial")) #put all non-reference arms into a class
+
+#plot network
+plot(icl_network, 
+     weight_nodes = TRUE, #weight node size by n patients 
+     weight_edges = TRUE) #weight edge thickness by n studies
+```
+
+## Network Meta-Analysis - Bayesian NMA
+
+- Fit \myred\textbf{fixed} \black or \myblue\textbf{random} \black effects models
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| cache: true
+#| results: hide
+
+icl_nma_fe <- nma(icl_network, trt_effects = "fixed",
+    prior_intercept = normal(scale=100), #log odds
+    prior_trt = normal(scale = 100)) #log OR
+
+icl_nma_re <- nma(icl_network, trt_effects = "random",
+    prior_intercept = normal(scale=100),
+    prior_trt = normal(scale = 100),
+    prior_het = half_normal(scale = 2.5)) #sigma
+```
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+dicfe <- dic(icl_nma_fe)
+dicre <- dic(icl_nma_re)
+```
+
+. . .
+
+- Compare \olive\textbf{model fit} \black using **DIC**:
+
+  + DIC(FE) = `r round(dicfe$dic,2)` 
+  + DIC(RE) = `r round(dicre$dic,2)`
+
+## Network Meta-Analysis - Bayesian NMA
+
+\scriptsize
+
+- Look at **estimates** of the chosen model for the \myred\textbf{relative effects} \black vs *reference* (nonantibacterial irrigation)
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+#compute relative trt effects for each arm vs reference on log odds ratio scale
+icl_trt_re <- relative_effects(icl_nma_re, trt_ref = "nonantibacterial")
+#store in array and take exp to get odds ratio
+or_array <- exp(as.array(icl_trt_re))
+#show results
+icl_or_re <- summary(or_array)
+icl_or_re_sum <- icl_or_re$summary[,c("parameter","mean","2.5%","97.5%")]
+
+kable(icl_or_re_sum, booktabs = TRUE, row.names = FALSE, digits = 3) %>%
+  row_spec(0, bold = TRUE) %>%
+  column_spec(1, bold = FALSE, color = 'black', italic = FALSE) %>%
+  kable_styling(font_size = 6, latex_options = "scale_down")
+```
+
+. . .
+
+\scriptsize
+
+- Create \olive\textbf{forest plots} \black using these estimates 
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| out-width: 60%
+#| out-height: 45%
+#| fig-align: center
+
+#convert estimates into data frame object
+icl_or_re_fp <- as.data.frame(icl_or_re)
+#extract information to be plotted in forestplot and display means (2.5% and 97.5%) intervals
+icl_or_re_fp$estci <- sprintf("%.2f (%.2f, %.2f)",
+  icl_or_re_fp$mean, icl_or_re_fp$`2.5%`, icl_or_re_fp$`97.5%`)
+
+library(forestplot) #load package
+#forest plot
+forestplot(icl_or_re_fp, 
+           mean = mean,  #mean value
+           lower = `2.5%`, upper = `97.5%`, #95% interval bounds
+           labeltext = c(parameter, estci), #text for labels
+           boxsize = 0.1, xlog = TRUE, 
+           txt_gp = fpTxtGp(ticks=gpar(cex=1.5), cex=1.5))
+```
+
+## Network Meta-Analysis - Bayesian NMA
+
+- Check overall performance in terms of \myblue\textbf{treatment rankings} \black
+  
+  + summarise results in terms of *posterior* mean (CIs) rank
+  + compute \myblue\textbf{posterior probabilities} \black of occupying a rank
+  + plot them using a **rankogram**
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| out-width: 70%
+#| out-height: 55%
+#| fig-align: center
+
+#get mean ranks and summaries for each trt
+icl_rank_re <- posterior_ranks(icl_nma_re)
+
+#get probs of occupying each rank for each trt
+icl_rank_probs_re <- posterior_rank_probs(icl_nma_re)
+
+#show rankogram
+plot(icl_rank_probs_re)
+```
+
+## Network Meta-Analysis - Bayesian NMR
+
+- Use NMR to check if `contamination_level` (0=clean, 1=contaminated) is a \olive\textbf{treatment effect-modifier} \black
+
+```{r}
+#| echo: true 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| results: hide
+#| cache: true
+
+icl_re_nmr <- nma(icl_network, trt_effects = "random",
+    regression = ~.trt:contamination_level, #inter
+    class_interactions = "common", #common inter
+    prior_intercept = normal(scale=100), 
+    prior_trt = normal(scale = 100),
+    prior_het = half_normal(scale = 2.5),
+    prior_reg = normal(scale = 100), #log OR inter
+    chains = 2, iter = 200)
+```
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+
+dicre_mr <- dic(icl_re_nmr)
+```
+
+. . .
+
+- Compare \olive\textbf{model fit} \black using **DIC**:
+
+  + DIC(RE) = `r round(dicre$dic,2)` 
+  + DIC(RE-MR) = `r round(dicre_mr$dic,2)`
+
+
+## Network Meta-Analysis - conclusions
+
+- Only considered \myred\textbf{binary outcomes} \black but NMAs can be implemented on many different data types using:
+
+  + different \myblue\textbf{distributional assumptions} \black
+  + \olive\textbf{link functions}\black
+
+. . .
+
+- Focus on \myblue\textbf{Bayesian} \black NMA methods through the `R` package [`multinma`](https://cran.r-project.org/web/packages/multinma/vignettes/vignette_overview.html) but corresponding \myred\textbf{frequentist} \black methods can be obtained using the `R` package [`netmeta`](chrome-extension://efaidnbmnnnibpcajpcglclefindmkaj/https://cran.r-project.org/web/packages/netmeta/vignettes/netmeta.pdf)
+
+. . .
+
+- In presence of \myred\textbf{disconnected} \black networks, ie ,alternative methods called \olive\textbf{population-adjusted analyses} \black may be used to derive \myred\textbf{unanchored} \black estimates:
+
+  + *Matching Adjusted Indirect Comparison* (MAIC) 
+  + *Simulated Treatment Comparison* (STC)
+  + require **IPD data** from at least one study
+
+# Reporting of CEAs
+
+## Results: base-case analysis
+
+- \olive \textbf{Costs} \black \& \olive \textbf{Effects} \black:
+  + *Absolute* \& *incremental* estimates with CIs
+  + *Absolute* \& *incremental* costs by cost category and total sums
+  + *Absolute* \& *incremental* QoL by health state (if applicable)
+
+. . .
+
+- \olive \textbf{CE quantities} \black:
+  + \myblue \textbf{Incremental Cost-Effectiveness Ratio} \black: $\text{ICER}=\frac{\Delta_c}{\Delta_e}$
+  + \myblue \textbf{Net Monetary Benefit} \black: $\text{NMB}=k\times \Delta_e - \Delta_c$
+    + Use \myred \textbf{reference CE threshold} $k$ \black --> \olive \textbf{CE in practice Manual} \black 
+    
+. . .
+
+- \olive \textbf{Subgroup analyses} \black (if applicable):
+  + All CE results *presented separately* for each subgroup
+  
+## Results: sensitivity analyses
+
+- \olive \textbf{Deterministic} \black \& \olive \textbf{scenario} \black analyses (*model-based*):
+
+  + Chosen parameter distribution 
+  + ICER and incremental quantities lower/upper values
+  + Always compared with base-case results
+
+. . .
+
+- \olive \textbf{Probabilistic} \black analyses:
+  + Graphically presented using:
+    + \myblue \textbf{Cost-Effectiveness Plane} \black (*CE plane*)
+    + \myblue \textbf{Cost-Effectiveness Acceptability Curve} \black (*CEAC*)
+
+. . .
+
+- \olive \textbf{Value of Information} \black analyses (*model-based*):
+  + \myred \textbf{Expected Value of (Partial) Perfect Information} \black (*EV(P)PI*) plot
+  + EVSI and ENBS results may be presented --> \myred \textbf{VoI analyses Manual} \black 
+  
+
+## Results: VoI analysis - example
+
+- \myred \textbf{EVPI} \black = expected value of *perfect* information across all modelled aspects of decision problem $\rightarrow$ see [voi](https://cran.r-project.org/web/packages/dampack/vignettes/voi.html)
+
+  + equal to the \myred\textbf{expected costs} \black of uncertainty with making the decision based on the current **imperfect** evidence
+  + *risk criterion* which shows the \myblue\textbf{consequences} \black of uncertainty
+
+```{r}
+#| echo: false 
+#| eval: true
+#| message: false
+#| warning: false
+#| error: false 
+#| out-width: 70%
+#| out-height: 55%
+#| fig-align: center
+
+#evpi plot
+evi.plot(ce_markov_bcea, graph = "ggplot2")
+```
+
+
+# Conclusions
+
+## Summary
+
+- Model-based analysis often used to inform HTA decisions but there remain strong concerns with their \myred\textbf{credibility}\black
+
+. . .
+
+- Guidelines for \myblue\textbf{good practices} \black in modelling should be followed:
+
+  + \olive\textbf{conceptualisation} \black of the model (eg perspective, time horizon, population) before observing the data
+  + choice of \olive\textbf{modelling technique} \black based on the context
+  + parameter estimation and \olive\textbf{uncertainty quantification} \black
+  + \olive\textbf{transparency} \black \& \olive\textbf{validation} \black
+
+. . .
+
+- Relative simple models (eg DTs and cohort MMs) \myblue\textbf{attractive} \black but may rely on too \myred\textbf{strong assumptions} \black in some case, where alternative \myblue\textbf{more flexible} \black approaches should be used, eg *individual-level microsimulation* methods
+
+. . .
+
+- Important to identify \myred \textbf{barriers} \black and \myblue \textbf{facilitators} \black of methods
+
+## R you still using Excel/SPSS?
+
+![](figure\meloni1.jpg){width=80% fig-align="center"}
+
+
+## R you still using Excel? (Incerti et. al 2019)
+
+- Historically, HTAs conducted with \myred \textbf{commercial software} \black (eg SPSS) or \myred \textbf{spreadsheet software} \black (eg Excel) which:
+
+  + Are sufficient for simple analyses **BUT**
+  + Put \myred \textbf{constraints} \black that limit credibility and relevance
+
+- \myblue \textbf{Modern programming languages} \black (eg R) facilitate the development of models that are:
+
+  + Increasingly sophisticated and realistic
+  + Capable of quantifying decision **uncertainty**
+  + Tansparent and reproducible
+  + Reusable and adaptable
+
+- \olive \textbf{R} \black user/developer communities well suited to: 
+
+  + Develop/implement HTA models in a **single software environment**
+  + Catch up with **methodological advances** 
+  + Spot and correct code errors via **open-source** nature of packages
+
+ 
+## A path forward for HTA
+ 
+- Still a general lack of \myred \textbf{software experience} \black in the HTA community:
+
+  + *Insufficient* training in script-based prog software
+  + *Limited* guidance on how to implement standard models
+
+- Critical to \myblue \textbf{train} \black the next generation of health economists in *state of the art* methods and *software* to implement them
+
+- **How to do this**?
+
+  + Developing university *courses* \& *workshops*
+  + Writing *tutorial papers*
+  + Making code *freely available* on repositories (eg *GitHub*)
+  + *Encouraging* the use of programming languages among researchers
+
+## Key references
+
+\scriptsize 
+
+::: {#refs}
+
+:::
+
+# Appendix - R code 
+
+## Appendix - resources for code and methods 
+
+- Full code available [\blue \@\textbf{AnGabrio GitHub} \black](https://github.com/AnGabrio/Code/tree/master/RHTAmethods) 
+
+- \myblue\textbf{Empirical Analyses}\black:
+
+  + `HSR_2025_v1.pdf` presentation
+  + `code.html` description of methods and `R` code 
+  + `code_functions.R` custom `R` code functions
+  + `example.R` fake example to implement code
+  + added examples \& functions to combine MI and bootstrapping
+
+- \myred\textbf{Model-Based Analyses}\black:
+
+  + `HSR_2025_v2.pdf` presentation
+  + `code2.html` description of *presented* methods and `R` code 
+  + `code3.html` description of *additional* methods and `R` code 
+  + original full code from online book [\blue \textbf{R for HTA Assessment} \black](https://gianluca.statistica.it/books/online/r-hta)
+
+
